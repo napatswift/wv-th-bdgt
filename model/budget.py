@@ -48,6 +48,29 @@ class BudgetItem(NodeMixin):
 
         if children:
             self.children = children
+    
+    def _check_sum(self):
+        if self.amount is None:
+            if any([
+                child.amount is not None
+                for child in self.children
+            ]):
+                raise ValueError(f'amount of {self.name} is None but some of children is not None')
+            
+            return
+        if self.children:
+            if any([
+                child.amount is None
+                for child in self.children
+            ]):
+                raise ValueError(f'amount of {self.name} is {self.amount} but some of children is None')
+            
+            sum_amount = sum([
+                child.amount
+                for child in self.children
+            ])
+            if self.amount != sum_amount:
+                raise ValueError(f'amount of {self.name} is {self.amount} but sum of children is {sum_amount}')
 
     def __str__(self):
         return self.budget_item.name
@@ -90,8 +113,19 @@ class BudgetItem(NodeMixin):
             ]
         }
     
+    def _get_error_message(self):
+        error_message = ''
+
+        try:
+            self._check_sum()
+        except Exception as e:
+            error_message += f'While checking sum: {e}\n'
+
+        return error_message
+    
     def to_table_rows(self, depth=1):
         rows = [{
+            'error_message': self._get_error_message(),
             'budget_type': self.budget_type.name,
             f'name_{depth}': self.name,
             'amount': self.amount,
@@ -141,6 +175,7 @@ class FiscalYearBudget:
     
     def to_table_row(self, depth=1):
         return {
+            'error_message': '',
             'budget_type': 'FISCAL_YEAR_BUDGET',
             f'name_{depth}': f'{self.year} - {self.year_end}' if self.year != self.year_end else f'{self.year}', # for reading
             'fiscal_year': self.year,
