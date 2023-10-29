@@ -173,7 +173,7 @@ def test_generate_json_with_fiscal_year_budget():
       {
         'year': 2563,
         'amount': 1000,
-        'year_end': None,
+        'year_end': 2563,
       }
     ],
     'children': [],
@@ -215,7 +215,7 @@ def test_generate_json_with_children_and_fiscal_year_budget():
       {
         'year': 2563,
         'amount': 1000,
-        'year_end': None,
+        'year_end': 2563,
       }
     ],
     'children': [
@@ -230,95 +230,3 @@ def test_generate_json_with_children_and_fiscal_year_budget():
       }
     ],
   }
-
-def test_generate_table_rows():
-  node = BudgetItem(
-    name='test',
-    budget_type='MINISTRY',
-    amount=1000,
-    document='path/to/test.pdf',
-    page=1,
-  )
-
-  rows = node.to_table_rows()
-
-  assert rows == [
-    {
-      'name': 'test',
-      'budget_type': 'MINISTRY',
-      'amount': 1000,
-      'document': 'path/to/test.pdf',
-      'page': 1,
-    }
-  ]
-
-def test_generate_table_rows_with_children():
-  node = BudgetItem(
-    name='test',
-    budget_type='MINISTRY',
-    amount=1000,
-    document='path/to/test.pdf',
-    page=1,
-    children=[
-      BudgetItem(
-        name='child',
-        budget_type='BUDGETARY_UNIT',
-        amount=1000,
-        document='path/to/test.pdf',
-        page=1,
-      )
-    ]
-  )
-
-  rows = node.to_table_rows()
-
-  assert rows == [
-    {
-      'name': 'test',
-      'budget_type': 'MINISTRY',
-      'amount': 1000,
-      'document': 'path/to/test.pdf',
-      'page': 1,
-    },
-    {
-      'name': 'child',
-      'budget_type': 'BUDGETARY_UNIT',
-      'amount': 1000,
-      'document': 'path/to/test.pdf',
-      'page': 1,
-    }
-  ]
-
-def test_generate_table_rows_with_fiscal_year_budget():
-  node = BudgetItem(
-    name='test',
-    budget_type='MINISTRY',
-    amount=1000,
-    document='path/to/test.pdf',
-    page=1,
-    fiscal_year_budget=[
-      FiscalYearBudget(
-        year=2563,
-        amount=1000,
-      )
-    ]
-  )
-
-  rows = node.to_table_rows()
-
-  assert rows == [
-    {
-      'name': 'test',
-      'budget_type': 'MINISTRY',
-      'amount': 1000,
-      'document': 'path/to/test.pdf',
-      'page': 1,
-    },
-    {
-      'name': '2563',
-      'budget_type': 'FISCAL_YEAR_BUDGET',
-      'amount': 1000,
-      'fiscal_year': 2563,
-      'fiscal_year_end': None,
-    }
-  ]

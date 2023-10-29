@@ -90,20 +90,20 @@ class BudgetItem(NodeMixin):
             ]
         }
     
-    def to_table_rows(self):
+    def to_table_rows(self, depth=1):
         rows = [{
             'budget_type': self.budget_type.name,
-            'name': self.name,
+            f'name_{depth}': self.name,
             'amount': self.amount,
             'document': self.document,
             'page': self.page,
         }]
 
         for fyb in self.fiscal_year_budget:
-            rows.append(fyb.to_table_row())
+            rows.append(fyb.to_table_row(depth))
 
         for child in self.children:
-            rows.extend(child.to_table_rows())
+            rows.extend(child.to_table_rows(depth=depth+1))
 
         return rows
 
@@ -118,7 +118,10 @@ class FiscalYearBudget:
 
     def __init__(self, year: int, amount: float, year_end: Optional[int] = None):
         self.year = year
-        self.year_end = year_end
+        if year_end is not None:
+            self.year_end = year_end
+        else:
+            self.year_end = year
         self.amount = amount
     
     @classmethod
@@ -136,11 +139,12 @@ class FiscalYearBudget:
             'amount': self.amount,
         }
     
-    def to_table_row(self):
+    def to_table_row(self, depth=1):
         return {
             'budget_type': 'FISCAL_YEAR_BUDGET',
-            'name': f'{self.year} - {self.year_end}' if self.year_end else f'{self.year}', # for reading
+            f'name_{depth}': f'{self.year} - {self.year_end}' if self.year != self.year_end else f'{self.year}', # for reading
             'fiscal_year': self.year,
             'fiscal_year_end': self.year_end,
             'amount': self.amount,
         }
+    
