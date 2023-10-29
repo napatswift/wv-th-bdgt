@@ -1,5 +1,6 @@
 from enum import Enum
 from typing import List, Optional
+from anytree import NodeMixin
 
 
 class BudgetType(Enum):
@@ -17,19 +18,7 @@ class BudgetType(Enum):
     BUDGET_DETAIL = 'BUDGET_DETAIL'
 
 
-class BudgetItem:
-    """
-    ข้อมูลรายการงบประมาณ
-
-    :param budget_type: ประเภทงบ
-    :param name: รายละเอียดของรายการงบ
-    :param amount: จำนวนงบ หรือ None หากว่างบเป็น `-`
-    :param document: file path
-    :param page: เลขหน้า
-    :param children: รายการงบใต้รายการปัจจุบัน
-    :param fiscal_year_budget: งบผูกพัน
-    """
-
+class BudgetItem(NodeMixin):
     def __init__(
         self,
         budget_type: BudgetType,
@@ -37,31 +26,45 @@ class BudgetItem:
         amount: Optional[float],
         document: str,
         page: int,
-        children: Optional[List['BudgetItem']],
-        fiscal_year_budget: Optional[List['FiscalYearBudget']],
+        parent: Optional['BudgetItem'] = None,
+        children: Optional[List['BudgetItem']] = None,
+        fiscal_year_budget: Optional[List['FiscalYearBudget']] = list(),
     ):
+        super().__init__()
         self.budget_type = budget_type
         self.name = name
         self.amount = amount
         self.document = document
         self.page = page
-        self.children = children
         self.fiscal_year_budget = fiscal_year_budget
 
+        self.parent = parent
+
+        if children:
+            self.children = children
+
+    def __str__(self):
+        return self.budget_item.name
+
+    def __repr__(self):
+        return self.budget_item.name
+    
     @classmethod
-    def from_json(cls, json):
-        fiscal_year_budget = json.get('fiscal_year_budget', list())
-        children = json.get('children', list())
+    def from_json(cls, json_obj):
         return cls(
-            budget_type=BudgetType(json['budget_type']),
-            name=json['name'],
-            amount=json['amount'],
-            document=json['document'],
-            page=json['page'],
-            children=[cls.from_json(child) for child in children],
+            budget_type=BudgetType(json_obj['budget_type']),
+            name=json_obj['name'],
+            amount=json_obj.get('amount'),
+            document=json_obj['document'],
+            page=json_obj['page'],
             fiscal_year_budget=[
-                FiscalYearBudget.from_json(fyb) for fyb in fiscal_year_budget
+                FiscalYearBudget.from_json(fyb)
+                for fyb in json_obj['fiscal_year_budget']
             ],
+            children=[
+                cls.from_json(child)
+                for child in json_obj['children']
+            ]
         )
 
 
@@ -80,9 +83,9 @@ class FiscalYearBudget:
         self.amount = amount
     
     @classmethod
-    def from_json(cls, json):
+    def from_json(cls, json_obj):
         return cls(
-            year=json['year'],
-            year_end=json.get('year_end'),
-            amount=json['amount'],
+            year=json_obj['year'],
+            year_end=json_obj.get('year_end'),
+            amount=json_obj['amount'],
         )

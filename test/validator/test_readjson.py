@@ -22,27 +22,6 @@ def test_read_file_invalid():
         assert True
 
 def test_read_file():
-    """
-    {
-        "budget_type": "MINISTRY",
-        "name": "root budget",
-        "amount": 100.0,
-        "document": "/path/to/document",
-        "page": 1,
-        "children": [
-            {
-                "budget_type": "BUDGETARY_UNIT",
-                "name": "child 1 budget",
-                "amount": 100.0,
-                "document": "/path/to/document",
-                "page": 1,
-                "children": [],
-                "fiscal_year_budget": []
-            }
-        ],
-        "fiscal_year_budget": []
-    }
-    """
     tree = read_file("test/validator/data/budget-tree-1.json")
 
     assert tree is not None
