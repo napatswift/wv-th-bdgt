@@ -1,25 +1,17 @@
+import pytest
 from validator import read_file
 
 def test_read_file_not_found():
-    try:
+    with pytest.raises(FileNotFoundError):
         read_file("test/validator/data/not-found.json")
-        assert False
-    except FileNotFoundError:
-        assert True
 
 def test_read_file_empty():
-    try:
+    with pytest.raises(ValueError):
         read_file("test/validator/data/budget-tree-empty.json")
-        assert False
-    except ValueError:
-        assert True
 
 def test_read_file_invalid():
-    try:
+    with pytest.raises(ValueError):
         read_file("test/validator/data/budget-tree-invalid.json")
-        assert False
-    except ValueError:
-        assert True
 
 def test_read_file():
     tree = read_file("test/validator/data/budget-tree-1.json")
