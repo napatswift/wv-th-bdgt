@@ -1,0 +1,19 @@
+{
+  "budget_type": "MINISTRY",
+  "name": "root budget",
+  "amount": 100.0,
+  "document": "/path/to/document",
+  "page": 1,
+  "children": [
+    {
+      "budget_type": "BUDGETARY_UNIT",
+      "name": "child 1 budget",
+      "amount": 100.0,
+      "document": "/path/to/document",
+      "page": 1,
+      "children": [],
+      "fiscal_year_budget": []
+    }
+  ],
+  "fiscal_year_budget": []
+}
