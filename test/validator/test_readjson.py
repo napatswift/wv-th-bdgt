@@ -36,6 +36,7 @@ def test_read_file():
     assert len(tree.fiscal_year_budget) == 0
     # assert child #1
     child = tree.children[0]
+    assert child.parent == tree
     assert child.budget_type.name == 'BUDGETARY_UNIT'
     assert child.name == "child 1 budget"
     assert child.amount == 100.0
