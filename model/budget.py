@@ -21,7 +21,7 @@ class BudgetType(Enum):
 class BudgetItem(NodeMixin):
     def __init__(
         self,
-        budget_type: BudgetType,
+        budget_type: str,
         name: str,
         amount: Optional[float],
         document: str,
@@ -31,7 +31,13 @@ class BudgetItem(NodeMixin):
         fiscal_year_budget: Optional[List['FiscalYearBudget']] = list(),
     ):
         super().__init__()
-        self.budget_type = budget_type
+        if isinstance(budget_type, BudgetType):
+            self.budget_type = budget_type
+        elif isinstance(budget_type, str):
+            self.budget_type = BudgetType(budget_type)
+        else:
+            raise ValueError(f'budget_type must be BudgetType or str, got {type(budget_type)}')
+        
         self.name = name
         self.amount = amount
         self.document = document
@@ -66,7 +72,40 @@ class BudgetItem(NodeMixin):
                 for child in json_obj['children']
             ]
         )
+    
+    def to_json(self):
+        return {
+            'budget_type': self.budget_type.name,
+            'name': self.name,
+            'amount': self.amount,
+            'document': self.document,
+            'page': self.page,
+            'fiscal_year_budget': [
+                fyb.to_json()
+                for fyb in self.fiscal_year_budget
+            ],
+            'children': [
+                child.to_json()
+                for child in self.children
+            ]
+        }
+    
+    def to_table_rows(self):
+        rows = [{
+            'budget_type': self.budget_type.name,
+            'name': self.name,
+            'amount': self.amount,
+            'document': self.document,
+            'page': self.page,
+        }]
 
+        for fyb in self.fiscal_year_budget:
+            rows.append(fyb.to_table_row())
+
+        for child in self.children:
+            rows.extend(child.to_table_rows())
+
+        return rows
 
 class FiscalYearBudget:
     """
@@ -77,7 +116,7 @@ class FiscalYearBudget:
     :param amount: จำนวนงบ
     """
 
-    def __init__(self, year: int, year_end: Optional[int], amount: float):
+    def __init__(self, year: int, amount: float, year_end: Optional[int] = None):
         self.year = year
         self.year_end = year_end
         self.amount = amount
@@ -89,3 +128,19 @@ class FiscalYearBudget:
             year_end=json_obj.get('year_end'),
             amount=json_obj['amount'],
         )
+    
+    def to_json(self):
+        return {
+            'year': self.year,
+            'year_end': self.year_end,
+            'amount': self.amount,
+        }
+    
+    def to_table_row(self):
+        return {
+            'budget_type': 'FISCAL_YEAR_BUDGET',
+            'name': f'{self.year} - {self.year_end}' if self.year_end else f'{self.year}', # for reading
+            'fiscal_year': self.year,
+            'fiscal_year_end': self.year_end,
+            'amount': self.amount,
+        }
