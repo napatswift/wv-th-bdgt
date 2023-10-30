@@ -187,3 +187,149 @@ def test_build_tree_no_rows():
   rows = []
   assert BudgetItem.build_tree_by_rows(rows) is None
 
+def test_build_tree_with_fiscal_year():
+  rows = [
+    {
+      'budget_type': 'MINISTRY',
+      'name_1': 'Ministry of Finance',
+      'amount': 1000,
+      'document': 'path/to/test.pdf',
+      'page': 1,
+    },
+    {
+      'budget_type': 'FISCAL_YEAR_BUDGET',
+      'name_1': '2020',
+      'amount': 100,
+      'fiscal_year': 2020,
+      'fiscal_year_end': 2020,
+    },
+    {
+      'budget_type': 'FISCAL_YEAR_BUDGET',
+      'name_1': '2021',
+      'amount': 200,
+      'fiscal_year': 2021,
+      'fiscal_year_end': 2021,
+    },
+    {
+      'budget_type': 'FISCAL_YEAR_BUDGET',
+      'name_1': '2022',
+      'amount': 300,
+      'fiscal_year': 2022,
+      'fiscal_year_end': 2022,
+    }
+  ]
+
+  root = BudgetItem.build_tree_by_rows(rows)
+
+  assert root.budget_type.name == 'MINISTRY'
+  assert root.name == 'Ministry of Finance'
+  assert root.amount == 1000
+  assert root.document == 'path/to/test.pdf'
+  assert root.page == 1
+  assert len(root.children) == 0
+  assert len(root.fiscal_year_budget) == 3
+
+def test_build_tree_child_with_fiscal_year_budget():
+  rows = [
+    {
+      'budget_type': 'MINISTRY',
+      'name_1': 'Ministry of Finance',
+      'amount': 1000,
+      'document': 'path/to/test.pdf',
+      'page': 1,
+    },
+    {
+      'budget_type': 'BUDGETARY_UNIT',
+      'name_2': 'Budgetary Unit 1',
+      'amount': 500,
+      'document': 'path/to/test.pdf',
+      'page': 1,
+    },
+    {
+      'budget_type': 'FISCAL_YEAR_BUDGET',
+      'name_2': '2020',
+      'amount': 100,
+      'fiscal_year': 2020,
+      'fiscal_year_end': 2020,
+    },
+    {
+      'budget_type': 'FISCAL_YEAR_BUDGET',
+      'name_2': '2021',
+      'amount': 200,
+      'fiscal_year': 2021,
+      'fiscal_year_end': 2021,
+    },
+    {
+      'budget_type': 'FISCAL_YEAR_BUDGET',
+      'name_2': '2022',
+      'amount': 300,
+      'fiscal_year': 2022,
+      'fiscal_year_end': 2022,
+    },
+    {
+      'budget_type': 'BUDGETARY_UNIT',
+      'name_2': 'Budgetary Unit 2',
+      'amount': 500,
+      'document': 'path/to/test.pdf',
+      'page': 1,
+    },
+    {
+      'budget_type': 'OUTPUT',
+      'name_3': 'Output 1',
+      'amount': 500,
+      'document': 'path/to/test.pdf',
+      'page': 1,
+    }
+  ]
+
+  root = BudgetItem.build_tree_by_rows(rows)
+
+  assert root.budget_type.name == 'MINISTRY'
+  assert root.name == 'Ministry of Finance'
+  assert root.amount == 1000
+  assert root.document == 'path/to/test.pdf'
+  assert root.page == 1
+  assert len(root.children) == 2
+
+  # assert children #1
+  child_1 = root.children[0]
+  assert len(child_1.children) == 0
+  assert len(child_1.fiscal_year_budget) == 3
+  assert child_1.budget_type.name == 'BUDGETARY_UNIT'
+
+  # assert children #2
+  child_2 = root.children[1]
+  assert len(child_2.children) == 1
+  assert len(child_2.fiscal_year_budget) == 0
+
+  # assert grandchild #1
+  grandchild_1 = child_2.children[0]
+  assert len(grandchild_1.children) == 0
+  assert len(grandchild_1.fiscal_year_budget) == 0
+  assert grandchild_1.budget_type.name == 'OUTPUT'
+  assert grandchild_1.name == 'Output 1'
+  assert grandchild_1.amount == 500
+  assert grandchild_1.document == 'path/to/test.pdf'
+  assert grandchild_1.page == 1
+
+def test_should_raise_error_when_fiscal_budget_is_the_first_row():
+  rows = [
+    {
+      'budget_type': 'FISCAL_YEAR_BUDGET',
+      'name_1': '2020',
+      'amount': 100,
+      'fiscal_year': 2020,
+      'fiscal_year_end': 2020,
+    },
+    {
+      'budget_type': 'MINISTRY',
+      'name_1': 'Ministry of Finance',
+      'amount': 1000,
+      'document': 'path/to/test.pdf',
+      'page': 1,
+    },
+  ]
+
+  with pytest.raises(ValueError) as e:
+    BudgetItem.build_tree_by_rows(rows)
+    assert str(e.value) == 'FISCAL_YEAR_BUDGET must have parent'

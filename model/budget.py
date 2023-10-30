@@ -33,7 +33,7 @@ class BudgetItem(NodeMixin):
         page: int,
         parent: Optional['BudgetItem'] = None,
         children: Optional[List['BudgetItem']] = None,
-        fiscal_year_budget: List['FiscalYearBudget'] = list(),
+        fiscal_year_budget: List['FiscalYearBudget'] = None,
     ):
         super().__init__()
         if isinstance(budget_type, BudgetType):
@@ -54,14 +54,17 @@ class BudgetItem(NodeMixin):
         if not isinstance(page, int):
             raise ValueError(f'page must be int, got {type(page)}')
         
-        if not isinstance(fiscal_year_budget, list):
+        if not isinstance(fiscal_year_budget, list) and fiscal_year_budget is not None:
             raise ValueError(f'fiscal_year_budget must be list, got {type(fiscal_year_budget)}')
         
         self.name = name
         self.amount = amount
         self.document = document
         self.page = page
-        self.fiscal_year_budget = fiscal_year_budget
+        if fiscal_year_budget is None:
+            self.fiscal_year_budget = list()
+        else:
+            self.fiscal_year_budget = fiscal_year_budget
 
         self.parent = parent
 
@@ -120,13 +123,15 @@ class BudgetItem(NodeMixin):
         ancestry_stack = []
         for row in rows:
             if row['budget_type'] == 'FISCAL_YEAR_BUDGET':
-                ancestry_stack[-1]['node']\
-                    .fiscal_year_budget.append(
-                        FiscalYearBudget(
-                            year=row['fiscal_year'],
-                            year_end=row['fiscal_year_end'],
-                            amount=row['amount'],
-                            ))
+                if len(ancestry_stack) == 0:
+                    raise ValueError('FISCAL_YEAR_BUDGET must have parent')
+
+                ancestry_stack[-1]['node'].fiscal_year_budget.append(
+                    FiscalYearBudget(
+                        year=row['fiscal_year'],
+                        year_end=row['fiscal_year_end'],
+                        amount=row['amount'],
+                        ))
                 continue
 
             curr_level = get_level_from_columns(row.keys())
@@ -157,7 +162,6 @@ class BudgetItem(NodeMixin):
             return ancestry_stack[0]['node']
     
     def to_json(self):
-        print(repr(self), self.fiscal_year_budget)
         return {
             'budget_type': self.budget_type.name,
             'name': self.name,

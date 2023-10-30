@@ -182,7 +182,7 @@ def test_generate_json_with_children():
         document='path/to/test.pdf',
         page=1,
       )
-    ]
+    ],
   )
 
   json_obj = node.to_json()
