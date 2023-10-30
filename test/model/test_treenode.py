@@ -1,4 +1,64 @@
 from model import BudgetItem, FiscalYearBudget, BudgetType
+import pytest
+
+def test_should_raise_error_when_name_not_string():
+  with pytest.raises(ValueError):
+    BudgetItem(
+      name=1,
+      budget_type='MINISTRY',
+      amount=1000,
+      document='path/to/test.pdf',
+      page=1,
+    )
+
+def test_should_raise_error_when_budget_type_not_string():
+  with pytest.raises(ValueError):
+    BudgetItem(
+      name='test',
+      budget_type=1,
+      amount=1000,
+      document='path/to/test.pdf',
+      page=1,
+    )
+
+def test_should_raise_error_when_amount_not_int():
+  with pytest.raises(ValueError):
+    BudgetItem(
+      name='test',
+      budget_type='MINISTRY',
+      amount='1000',
+      document='path/to/test.pdf',
+      page=1,
+    )
+
+def test_should_not_raise_error_when_amount_is_none():
+  BudgetItem(
+    name='test',
+    budget_type='MINISTRY',
+    amount=None,
+    document='path/to/test.pdf',
+    page=1,
+  )
+
+def test_should_raise_error_when_document_not_string():
+  with pytest.raises(ValueError):
+    BudgetItem(
+      name='test',
+      budget_type='MINISTRY',
+      amount=1000,
+      document=1,
+      page=1,
+    )
+
+def test_should_raise_error_when_page_not_int():
+  with pytest.raises(ValueError):
+    BudgetItem(
+      name='test',
+      budget_type='MINISTRY',
+      amount=1000,
+      document='path/to/test.pdf',
+      page='1',
+    )
 
 
 def test_create_node():
@@ -87,17 +147,18 @@ def test_should_raise_value_error_when_budget_type_is_invalid():
   
 def test_generate_json():
   node = BudgetItem(
-    name='test',
+    name='test_generate_json',
     budget_type='MINISTRY',
     amount=1000,
     document='path/to/test.pdf',
     page=1,
+    fiscal_year_budget=[]
   )
 
   json_obj = node.to_json()
 
   assert json_obj == {
-    'name': 'test',
+    'name': 'test_generate_json',
     'budget_type': 'MINISTRY',
     'amount': 1000,
     'document': 'path/to/test.pdf',
@@ -108,7 +169,7 @@ def test_generate_json():
 
 def test_generate_json_with_children():
   node = BudgetItem(
-    name='test',
+    name='test_generate_json_with_children',
     budget_type='MINISTRY',
     amount=1000,
     document='path/to/test.pdf',
@@ -127,7 +188,7 @@ def test_generate_json_with_children():
   json_obj = node.to_json()
 
   assert json_obj == {
-    'name': 'test',
+    'name': 'test_generate_json_with_children',
     'budget_type': 'MINISTRY',
     'amount': 1000,
     'document': 'path/to/test.pdf',
@@ -148,7 +209,7 @@ def test_generate_json_with_children():
 
 def test_generate_json_with_fiscal_year_budget():
   node = BudgetItem(
-    name='test',
+    name='test_generate_json_with_fiscal_year_budget',
     budget_type='MINISTRY',
     amount=1000,
     document='path/to/test.pdf',
@@ -164,7 +225,7 @@ def test_generate_json_with_fiscal_year_budget():
   json_obj = node.to_json()
 
   assert json_obj == {
-    'name': 'test',
+    'name': 'test_generate_json_with_fiscal_year_budget',
     'budget_type': 'MINISTRY',
     'amount': 1000,
     'document': 'path/to/test.pdf',

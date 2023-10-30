@@ -2,6 +2,8 @@
 
 ### 1. JSON
 
+Json is used to store the budget data from each methods. The structure of the json is as follows:
+
 ```json
 {
   "budget_type": "PROJECT",
@@ -46,7 +48,18 @@
 }
 ```
 
+The `budget_type` field can be one of the following:
+
+- `MINISTRY`
+- `BUDGETARY_UNIT`
+- `BUDGET_PLAN`
+- `PROJECT`
+- `OUTPUT`
+- `BUDGET_DETAIL`
+
 ### 2. CSV For Validating And Editing
+
+The CSV file is used to validate and edit the budget data for non-technical users. The structure of the CSV file is as follows:
 
 | column          | description                                                                                             |
 | --------------- | ------------------------------------------------------------------------------------------------------- |

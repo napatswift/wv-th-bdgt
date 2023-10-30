@@ -1,6 +1,6 @@
 from model import BudgetItem, FiscalYearBudget, BudgetType
 
-def test_build_table_row():
+def test_build():
     node = BudgetItem(
         name='test',
         budget_type='MINISTRY',
@@ -9,7 +9,7 @@ def test_build_table_row():
         page=1,
     )
 
-    row = node.to_table_rows()
+    row = node.to_rows()
 
     assert row == [
         {
@@ -22,7 +22,7 @@ def test_build_table_row():
         }
     ]
 
-def test_build_table_row_with_fiscal_year_budgets():
+def test_build_with_fiscal_year_budgets():
     node = BudgetItem(
         name='test',
         budget_type='MINISTRY',
@@ -37,7 +37,7 @@ def test_build_table_row_with_fiscal_year_budgets():
         ]
     )
 
-    row = node.to_table_rows()
+    row = node.to_rows()
 
     assert row == [
         {
@@ -58,7 +58,7 @@ def test_build_table_row_with_fiscal_year_budgets():
         }
     ]
 
-def test_build_table_row_with_2_fiscal_year_budgets():
+def test_build_with_2_fiscal_year_budgets():
     node = BudgetItem(
         name='test',
         budget_type='MINISTRY',
@@ -77,7 +77,7 @@ def test_build_table_row_with_2_fiscal_year_budgets():
         ]
     )
 
-    row = node.to_table_rows()
+    row = node.to_rows()
 
     assert row == [
         {
@@ -106,7 +106,7 @@ def test_build_table_row_with_2_fiscal_year_budgets():
         }
     ]
 
-def test_build_table_row_with_2_fiscal_year_budgets_with_different_amount():
+def test_build_with_2_fiscal_year_budgets_with_different_amount():
     node = BudgetItem(
         name='test',
         budget_type='MINISTRY',
@@ -125,7 +125,7 @@ def test_build_table_row_with_2_fiscal_year_budgets_with_different_amount():
         ]
     )
 
-    row = node.to_table_rows()
+    row = node.to_rows()
 
     assert row == [
         {
@@ -154,7 +154,7 @@ def test_build_table_row_with_2_fiscal_year_budgets_with_different_amount():
         }
     ]
 
-def test_build_table_row_with_children():
+def test_build_with_children():
     node = BudgetItem(
         name='test',
         budget_type='MINISTRY',
@@ -172,7 +172,7 @@ def test_build_table_row_with_children():
         ]
     )
 
-    row = node.to_table_rows()
+    row = node.to_rows()
 
     assert row == [
         {
@@ -193,7 +193,7 @@ def test_build_table_row_with_children():
         }
     ]
 
-def test_build_table_row_with_children_depth_more_than_one():
+def test_build_with_children_depth_more_than_one():
     node = BudgetItem(
         name='test',
         budget_type='MINISTRY',
@@ -220,7 +220,7 @@ def test_build_table_row_with_children_depth_more_than_one():
         ]
     )
 
-    row = node.to_table_rows()
+    row = node.to_rows()
 
     assert row == [
         {
@@ -249,7 +249,7 @@ def test_build_table_row_with_children_depth_more_than_one():
         }
     ]
 
-def test_build_table_row_with_child_that_has_fiscal_year():
+def test_build_with_child_that_has_fiscal_year():
     root = BudgetItem(
         name='root',
         budget_type='MINISTRY',
@@ -273,7 +273,7 @@ def test_build_table_row_with_child_that_has_fiscal_year():
         ]
     )
 
-    row = root.to_table_rows()
+    row = root.to_rows()
 
     assert row == [
         {
@@ -327,7 +327,7 @@ def test_should_add_error_message_when_sum_of_children_amount_is_not_equal_to_pa
         ]
     )
 
-    row = root.to_table_rows()
+    row = root.to_rows()
 
     assert row == [
         {
@@ -381,7 +381,7 @@ def test_should_add_error_message_when_some_of_children_amount_is_none():
         ]
     )
 
-    row = root.to_table_rows()
+    row = root.to_rows()
 
     assert row == [
         {
@@ -435,7 +435,7 @@ def test_should_add_error_message_when_parent_amount_is_none_and_children_amount
         ]
     )
 
-    row = root.to_table_rows()
+    row = root.to_rows()
 
     assert row == [
         {
