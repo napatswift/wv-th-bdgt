@@ -37,6 +37,20 @@ class BudgetItem(NodeMixin):
             self.budget_type = BudgetType(budget_type)
         else:
             raise ValueError(f'budget_type must be BudgetType or str, got {type(budget_type)}')
+        if not isinstance(name, str):
+            raise ValueError(f'name must be str, got {type(name)}')
+        
+        if amount is not None and not isinstance(amount, (int, float)):
+            raise ValueError(f'amount must be int or float, got {type(amount)}')
+        
+        if not isinstance(document, str):
+            raise ValueError(f'document must be str, got {type(document)}')
+        
+        if not isinstance(page, int):
+            raise ValueError(f'page must be int, got {type(page)}')
+        
+        if not isinstance(fiscal_year_budget, list):
+            raise ValueError(f'fiscal_year_budget must be list, got {type(fiscal_year_budget)}')
         
         self.name = name
         self.amount = amount
@@ -73,26 +87,26 @@ class BudgetItem(NodeMixin):
                 raise ValueError(f'amount of {self.name} is {self.amount} but sum of children is {sum_amount}')
 
     def __str__(self):
-        return self.budget_item.name
+        return self.name
 
     def __repr__(self):
-        return self.budget_item.name
+        return f'BudgetItem({self.budget_type.name}, {self.name}, {self.amount})'
     
     @classmethod
     def from_json(cls, json_obj):
         return cls(
             budget_type=BudgetType(json_obj['budget_type']),
-            name=json_obj['name'],
+            name=json_obj.get('name'),
             amount=json_obj.get('amount'),
-            document=json_obj['document'],
-            page=json_obj['page'],
+            document=json_obj.get('document'),
+            page=json_obj.get('page'),
             fiscal_year_budget=[
                 FiscalYearBudget.from_json(fyb)
-                for fyb in json_obj['fiscal_year_budget']
+                for fyb in json_obj.get('fiscal_year_budget', list())
             ],
             children=[
                 cls.from_json(child)
-                for child in json_obj['children']
+                for child in json_obj.get('children', list())
             ]
         )
     
@@ -157,6 +171,12 @@ class FiscalYearBudget:
         else:
             self.year_end = year
         self.amount = amount
+
+    def __str__(self):
+        return f'{self.year} - {self.year_end}' if self.year != self.year_end else f'{self.year}'
+    
+    def __repr__(self):
+        return f'FiscalYearBudget({self.year}, {self.year_end}, {self.amount})'
     
     @classmethod
     def from_json(cls, json_obj):
@@ -177,7 +197,7 @@ class FiscalYearBudget:
         return {
             'error_message': '',
             'budget_type': 'FISCAL_YEAR_BUDGET',
-            f'name_{depth}': f'{self.year} - {self.year_end}' if self.year != self.year_end else f'{self.year}', # for reading
+            f'name_{depth}': str(self),
             'fiscal_year': self.year,
             'fiscal_year_end': self.year_end,
             'amount': self.amount,
