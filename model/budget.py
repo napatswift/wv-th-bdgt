@@ -4,6 +4,7 @@ from anytree import NodeMixin
 
 
 class BudgetType(Enum):
+    ROOT = 'ROOT'
     # กระทรวง/หน่วยงานเทียบเท่ากระทรวง
     MINISTRY = 'MINISTRY'
     # หน่วยรับงบประมาณ
@@ -120,10 +121,24 @@ class BudgetItem(NodeMixin):
     
     @classmethod
     def build_tree_by_rows(cls, rows) -> 'BudgetItem':
-        ancestry_stack = []
+        if len(rows) == 0:
+            return None
+        
+        ancestry_stack = [
+            {
+                'node': cls(
+                    budget_type='ROOT',
+                    name='ROOT',
+                    amount=None,
+                    document='',
+                    page=0,
+                ),
+                'level': 0,
+            }
+        ]
         for row in rows:
             if row['budget_type'] == 'FISCAL_YEAR_BUDGET':
-                if len(ancestry_stack) == 0:
+                if len(ancestry_stack) == 0 or ancestry_stack[-1]['level'] < 1:
                     raise ValueError('FISCAL_YEAR_BUDGET must have parent')
 
                 ancestry_stack[-1]['node'].fiscal_year_budget.append(
@@ -158,8 +173,14 @@ class BudgetItem(NodeMixin):
                 'level': curr_level,
             })
 
-        if ancestry_stack:
-            return ancestry_stack[0]['node']
+        root = ancestry_stack[0]['node']
+        if root.budget_type.name != 'ROOT':
+            raise ValueError('First row must be ROOT')
+        
+        if len(root.children) == 1:
+            return root.children[0] # if there is only one child, return it
+        
+        return root
     
     def to_json(self):
         return {
