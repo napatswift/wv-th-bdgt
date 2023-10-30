@@ -333,3 +333,42 @@ def test_should_raise_error_when_fiscal_budget_is_the_first_row():
   with pytest.raises(ValueError) as e:
     BudgetItem.build_tree_by_rows(rows)
     assert str(e.value) == 'FISCAL_YEAR_BUDGET must have parent'
+
+def test_build_tree_with_multiple_roots():
+  rows = [
+    {
+      'budget_type': 'MINISTRY',
+      'name_1': 'Ministry of Finance',
+      'amount': 1000,
+      'document': 'path/to/test.pdf',
+      'page': 1,
+    },
+    {
+      'budget_type': 'MINISTRY',
+      'name_1': 'Ministry of Health',
+      'amount': 1000,
+      'document': 'path/to/test.pdf',
+      'page': 1,
+    },
+  ]
+
+  root = BudgetItem.build_tree_by_rows(rows)
+
+  assert root.budget_type.name == 'ROOT'
+  assert root.name == 'ROOT'
+  assert root.amount == None
+  assert root.document == ''
+  assert root.page == 0
+  assert len(root.children) == 2
+
+  # assert children #1
+  child_1 = root.children[0]
+  assert len(child_1.children) == 0
+  assert child_1.budget_type.name == 'MINISTRY'
+  assert child_1.name == 'Ministry of Finance'
+
+  # assert children #2
+  child_2 = root.children[1]
+  assert len(child_2.children) == 0
+  assert child_2.budget_type.name == 'MINISTRY'
+  assert child_2.name == 'Ministry of Health'
