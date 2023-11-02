@@ -6,7 +6,6 @@ from .text import (
   PageText,
 )
 
-
 from typing import List
 
 def group_text_by_line(text_list: List[WordText], threshold=0.01):
@@ -85,7 +84,6 @@ def is_image_page(page: fitz.Page) -> bool:
     # then it's an image page.
     return image_size / page_size > theshold
 
-
 class DocumentText:
     def __init__(
             self,
@@ -124,8 +122,9 @@ class DocumentText:
                     continue
                 list_of_line.append(LineText(words, pidx, lidx))
 
-            page_list.append(
-                PageText(list_of_line, pidx, page_width,
-                         page_height, is_image_page(page)))
+            page = PageText(list_of_line, pidx, page_width,
+                         page_height, is_image_page(page))
+            # page.contains_table = page_contains_table(page)
+            page_list.append(page)
 
         return page_list

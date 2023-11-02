@@ -9,7 +9,10 @@ from .documenttext import DocumentText
 from .pdf_to_tree import (
     LineItem,
     LineWrapper,
-    get_amount_from_string
+    get_amount_from_string,
+    read_lines,
+    get_entries,
+    extract_tree_levels
 )
 
 

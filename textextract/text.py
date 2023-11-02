@@ -220,6 +220,7 @@ class PageText:
         self.height = height
         self.is_image = is_image
         self.is_skipped = False
+        self.contains_table = False
         self._page_number = -1
 
     @property

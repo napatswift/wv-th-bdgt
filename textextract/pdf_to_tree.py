@@ -1,16 +1,10 @@
-from typing import Any, List
+from typing import List
 from textextract import DocumentText, LineText
 from model import BudgetItem
 import re
 import logging
 
 logger = logging.getLogger(__name__)
-logger.setLevel(logging.DEBUG)
-handler = logging.FileHandler('pdf-to-tree.log', mode='w')
-formatter = logging.Formatter(
-    '%(name)s::%(levelname)s::%(message)s')
-handler.setFormatter(formatter)
-logger.addHandler(handler)
 
 
 class LineWrapper:
@@ -322,17 +316,3 @@ def page_x1(entries: List[LineItem]):
         page_x1_dict[page] = max(x1s)
 
     return page_x1_dict
-
-
-# if __name__ == '__main__':
-#     lines = read_lines('test/data/budget-1page-5nodes.pdf')
-#     entries = get_entries(lines)
-#     logger.info('Total entries: {}'.format(len(entries)))
-
-#     root = extract_tree_levels(entries)
-
-#     for ent in entries:
-#         logger.info(
-#             f'ENTRY::level={ent.level}, type={ent.itemtype}, text={ent}')
-        
-#     logger.info('ROOT::{}'.format(json.dumps(root.to_json())))
