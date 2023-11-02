@@ -5,7 +5,9 @@ from .text import (
   WordText,
   PageText,
 )
-
+from ..tableparser import (
+    extract_tables
+)
 from typing import List
 
 def group_text_by_line(text_list: List[WordText], threshold=0.01):
@@ -84,6 +86,10 @@ def is_image_page(page: fitz.Page) -> bool:
     # then it's an image page.
     return image_size / page_size > theshold
 
+def page_contains_table(page: fitz.Page) -> bool:
+    rects = [d['rect'] for d in page.get_drawings()]
+    return len(extract_tables(rects)) > 0
+
 class DocumentText:
     def __init__(
             self,
@@ -122,9 +128,9 @@ class DocumentText:
                     continue
                 list_of_line.append(LineText(words, pidx, lidx))
 
-            page = PageText(list_of_line, pidx, page_width,
+            pagetext = PageText(list_of_line, pidx, page_width,
                          page_height, is_image_page(page))
-            # page.contains_table = page_contains_table(page)
-            page_list.append(page)
+            pagetext.contains_table = page_contains_table(page)
+            page_list.append(pagetext)
 
         return page_list

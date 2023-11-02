@@ -5,7 +5,7 @@ import json
 logger = logging.getLogger(__name__)
 
 if __name__ == '__main__':
-    lines = read_lines('test/data/budget-1page-5nodes.pdf')
+    lines = read_lines('test/data/2021.3.14@433-444.pdf')
     entries = get_entries(lines)
     logger.info('Total entries: {}'.format(len(entries)))
 

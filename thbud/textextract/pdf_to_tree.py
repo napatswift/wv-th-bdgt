@@ -1,6 +1,7 @@
 from typing import List
-from ..textextract import DocumentText, LineText
-from ..model import BudgetItem
+
+from ..textextract import DocumentText, LineText, PageText
+from ..model import BudgetItem, FiscalYearBudget
 import re
 import logging
 
@@ -8,7 +9,7 @@ logger = logging.getLogger(__name__)
 
 
 class LineWrapper:
-    def __init__(self, line, page):
+    def __init__(self, line, page: PageText):
         self.line = line
         self.page = page
 
@@ -95,7 +96,7 @@ def is_redundant_line(line_text: List[str]):
         or 'รายละเอียดงบประมาณรายจ่ายจำแนกตามแผนงาน' in line_text)
 
 
-def get_entries(lines: List[LineText]):
+def get_entries(lines: List[LineWrapper]):
     # flags
     bullet_flag = False
     # project and output flag
@@ -128,10 +129,10 @@ def get_entries(lines: List[LineText]):
             continue
 
         # budget plan
-        # if i[0] not in no_table:
-        #     if re.match(r'7.\d+$', line_text[0]) or (len(line_text) > 1 and line_text[1].startswith('แผนงาน')):
-        #         entries.append(('budget_plan', group.index.to_list()))
-        #     continue
+        if line.page.contains_table:
+            if re.match(r'7.\d+$', line_text[0]) or (len(line_text) > 1 and line_text[1].startswith('แผนงาน')):
+                entries.append(('budget_plan', [line_id]))
+            continue
 
         patern_of_bullet = get_patern_of_bullet(line_text[0])
         if re.match(r'ป?ี \d{4} ', ' '.join(line_text)):
@@ -196,8 +197,12 @@ def extract_tree_levels(bud_items: List[LineItem], x_diff_threshold=0.005) -> Bu
             # In this case, we clear the stack and add a new level to the levels list.
             if bud_item.itemtype in ['budget_plan', 'PROJECT', 'OUTPUT']:
                 stack_x = []
+            
+            if bud_item.itemtype == 'budget_plan':
+                bud_item.set_level(-2)
+            elif bud_item.itemtype == 'PROJECT' or bud_item.itemtype == 'OUTPUT':
+                bud_item.set_level(-1)
 
-            bud_item.set_level(-1)
             continue
 
         # pex is the x position of the end of the page that the budget unit is on.
@@ -249,10 +254,13 @@ def extract_tree_levels(bud_items: List[LineItem], x_diff_threshold=0.005) -> Bu
 
     parent_stack = [{
         'node': root,
-        'level': -2,
+        'level': -10,
     }]
 
     for bud_item in bud_items:
+        if bud_item.itemtype == 'fiscal_year':
+            continue
+
         while len(parent_stack) > 0 and parent_stack[-1]['level'] >= bud_item.level:
             parent_stack.pop()
 
@@ -267,7 +275,7 @@ def extract_tree_levels(bud_items: List[LineItem], x_diff_threshold=0.005) -> Bu
             name=str(bud_item),
             amount=get_amount_from_string(str(bud_item)),
             document='',
-            page=0,
+            page=bud_item.page_index,
             parent=parent,
         )
 
@@ -281,7 +289,7 @@ def extract_tree_levels(bud_items: List[LineItem], x_diff_threshold=0.005) -> Bu
     return root
 
 
-def read_lines(fpath: str):
+def read_lines(fpath: str) -> LineWrapper:
     pages = DocumentText(fpath).pages
 
     lines = []
