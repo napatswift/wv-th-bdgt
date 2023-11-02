@@ -1,4 +1,4 @@
-from textextract import DocumentText, read_lines, get_entries, extract_tree_levels
+from thbud.textextract import read_lines, get_entries, extract_tree_levels
 import logging
 import json
 

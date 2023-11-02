@@ -1,4 +1,4 @@
-from tableparser import extract_tables, is_on_line, dfs
+from thbud.tableparser import extract_tables, is_on_line, dfs
 import fitz
 
 # is_on_line tests

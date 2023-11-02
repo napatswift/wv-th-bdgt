@@ -1,4 +1,4 @@
-from textextract import LineItem, get_amount_from_string
+from thbud.textextract import LineItem, get_amount_from_string
 import pytest
 from unittest.mock import MagicMock
 

@@ -1,5 +1,5 @@
 import pytest
-from textextract import DocumentText
+from thbud.textextract import DocumentText
 
 
 def test_should_raise_error_when_file_not_found():

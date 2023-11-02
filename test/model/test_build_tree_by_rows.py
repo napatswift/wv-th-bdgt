@@ -1,5 +1,5 @@
-from model import BudgetItem
-from model.budget import get_level_from_columns
+from thbud.model import BudgetItem
+from thbud.model.budget import get_level_from_columns
 
 import pytest
 

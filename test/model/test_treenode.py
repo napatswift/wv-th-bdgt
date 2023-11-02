@@ -1,4 +1,4 @@
-from model import BudgetItem, FiscalYearBudget, BudgetType
+from thbud.model import BudgetItem, FiscalYearBudget, BudgetType
 import pytest
 
 def test_should_raise_error_when_name_not_string():

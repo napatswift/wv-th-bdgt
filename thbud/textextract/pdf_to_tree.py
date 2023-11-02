@@ -1,6 +1,6 @@
 from typing import List
-from textextract import DocumentText, LineText
-from model import BudgetItem
+from ..textextract import DocumentText, LineText
+from ..model import BudgetItem
 import re
 import logging
 

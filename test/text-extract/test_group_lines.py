@@ -1,5 +1,5 @@
-from textextract import group_text_by_line
-from textextract.text import WordText
+from thbud.textextract import group_text_by_line
+from thbud.textextract.text import WordText
 
 
 def test_empty_list():

@@ -1,4 +1,4 @@
-from model import BudgetItem, FiscalYearBudget, BudgetType
+from thbud.model import BudgetItem, FiscalYearBudget, BudgetType
 
 def test_build():
     node = BudgetItem(
