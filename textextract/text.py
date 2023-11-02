@@ -1,8 +1,6 @@
 import re
 from typing import List, Dict, Union
-from enum import Enum
 import logging
-import fitz
 
 logger = logging.getLogger(__name__)
 
@@ -15,8 +13,6 @@ def to_dict(obj) -> Dict:
     if isinstance(obj, list):
         list_of_dicts = []
         for o in obj:
-            if not hasattr(o, 'to_dict'):
-                raise Exception(f'Object {o} does not have to_dict method')
             list_of_dicts.append(to_dict(o))
         return list_of_dicts
     if hasattr(obj, 'to_dict'):

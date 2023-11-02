@@ -90,7 +90,7 @@ class DocumentText:
     def __init__(
             self,
             filepath: str,
-        ) -> None:
+        ) -> 'DocumentText':
         self.filepath = filepath
         self.pages = self._read_pdf_file()
 

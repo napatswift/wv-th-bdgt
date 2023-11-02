@@ -1,0 +1,12 @@
+error_message,budget_type,name_1,name_2,name_3,amount,document,page,fiscal_year,fiscal_year_end
+,PROJECT,1. งบบุคลากร,,,"73,601,700",test/data/budget-1page-11nodes-3depth.pdf,253,,
+,BUDGET_DETAIL,,1.1 เงินเดือนและค่าจ้างประจำ,,"64,697,500",test/data/budget-1page-11nodes-3depth.pdf,253,,
+,,,,1.1.1 เงินเดือน,"61,274,100",test/data/budget-1page-11nodes-3depth.pdf,253,,
+,,,,1.1.2 ค่าจ้างประจำ,"3,423,400",test/data/budget-1page-11nodes-3depth.pdf,253,,
+,BUDGET_DETAIL,,1.2 ค่าตอบแทนพนักงานราชการ,,"8,904,200",test/data/budget-1page-11nodes-3depth.pdf,253,,
+,BUDGET_DETAIL,2. งบดำเนินงาน,,,"475,800",test/data/budget-1page-11nodes-3depth.pdf,253,,
+,BUDGET_DETAIL,,2.1 ค่าตอบแทน ใช้สอยและวัสดุ,,"475,800",test/data/budget-1page-11nodes-3depth.pdf,253,,
+,BUDGET_DETAIL,,,(1) ค่าเช่าบ้าน,"132,000",test/data/budget-1page-11nodes-3depth.pdf,253,,
+,BUDGET_DETAIL,,,(2) ค่าตอบแทนพิเศษเงินเดือนเต็มขั้น,"3,400",test/data/budget-1page-11nodes-3depth.pdf,253,,
+,BUDGET_DETAIL,,,(3) เงินสมทบกองทุนประกันสังคม,"315,000",test/data/budget-1page-11nodes-3depth.pdf,253,,
+,BUDGET_DETAIL,,,(4) เงินสมทบกองทุนเงินทดแทน,25400,test/data/budget-1page-11nodes-3depth.pdf,253,,

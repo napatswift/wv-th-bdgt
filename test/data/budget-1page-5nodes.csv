@@ -1,0 +1,7 @@
+error_message,budget_type,name_1,name_2,name_3,amount,document,page,fiscal_year,fiscal_year_end
+,PROJECT,โครงการ : โครงการการส่งเสริมประสิทธิภาพด้านการคุ้มครองผู้บริโภค,,,"3,469,200",test/data/budget-1page-5nodes.pdf,179,,
+,BUDGET_DETAIL,,1. งบรายจ่ายอื่น,,"3,469,200",test/data/budget-1page-5nodes.pdf,179,,
+,BUDGET_DETAIL,,,1) การสัมมนาเสริมสร้างเครือข่ายคมครองผู้บรโภคในส่วนภูมิภาค,"219,200",test/data/budget-1page-5nodes.pdf,179,,
+,BUDGET_DETAIL,,,2) การขับเคลื่อนแผนยุทธศาสตร์การคุ้มครองผู้บริโภคแห่งชาติ ฉบับที่ 1,"1,400,000",test/data/budget-1page-5nodes.pdf,179,,
+,BUDGET_DETAIL,,,3) การสร้างเครือข่ายและพัฒนาศักยภาพแกนนำคุ้มครองผู้บริโภคในสถานศึกษา,"500,000",test/data/budget-1page-5nodes.pdf,179,,
+,BUDGET_DETAIL,,,4) การพัฒนาเครือข่ายผู้นำอาสาสมัครคุ้มครองผู้บริโภค (อสคบ.),"1,350,000",test/data/budget-1page-5nodes.pdf,179,,

@@ -6,6 +6,11 @@ from .text import (
     PageText,
 )
 from .documenttext import DocumentText
+from .pdf_to_tree import (
+    LineItem,
+    LineWrapper,
+    get_amount_from_string
+)
 
 
 def read_text_in_pdf_file(filepath, file_id=None) -> List[PageText]:
