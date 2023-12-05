@@ -1,4 +1,4 @@
-from thbud.textextract import group_text_by_line
+from thbud.textextract.documenttext import group_text_by_line
 from thbud.textextract.text import WordText
 
 

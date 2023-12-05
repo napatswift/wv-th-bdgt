@@ -1,5 +1,6 @@
 import re
 from typing import List, Dict, Union
+from . import documenttext
 import logging
 
 logger = logging.getLogger(__name__)
@@ -75,12 +76,14 @@ class WordText:
 
 
 class LineText:
-    def __init__(self, words: List[WordText], page_index: int, line_index: int):
+    def __init__(self, words: List[WordText], page_index: int, line_index: int, page: 'PageText' = None):
         self.page_number: str = None
         self.words = self._join_words(words)
         self.page_index = page_index
         self.line_index = line_index
         self.doc_id = None
+        self.page = page
+
 
         self._assert_params()
 
@@ -205,7 +208,15 @@ class PageText:
         is_image (bool): Whether the page is an image.
     """
 
-    def __init__(self, lines: List[LineText], page_index: int, width: Union[float, int], height: Union[float, int], is_image: bool,):
+    def __init__(
+        self,
+        lines: List[LineText],
+        page_index: int,
+        width: Union[float, int],
+        height: Union[float, int],
+        is_image: bool,
+        document: 'documenttext.DocumentText' = None,
+    ):
         assert isinstance(lines, list)
         for line in lines:
             assert isinstance(line, LineText)
@@ -222,6 +233,8 @@ class PageText:
         self.is_skipped = False
         self.contains_table = False
         self._page_number = -1
+        self.doc_id = None
+        self.document = document
 
     @property
     def page_number(self) -> str:
@@ -283,7 +296,7 @@ class PageText:
     def to_dict(self) -> Dict:
         return {
             'type': 'PageText',
-            'docId': self.doc_id,
+            'docId': None if self.document is None else self.document.filepath,
             'pageIndex': self.page_index,
             'pageNumber': self.page_number,
             'lines': to_dict(self.lines),
@@ -294,6 +307,7 @@ class PageText:
             'isImage': self.is_image,
             'isSkipped': self.is_skipped,
         }
+
 
 def get_smallest_indent(x0, x0_list):
     for i, x in enumerate(x0_list):

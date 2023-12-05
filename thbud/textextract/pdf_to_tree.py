@@ -1,13 +1,13 @@
-from typing import List
+from typing import List, Tuple
 
-from ..textextract import DocumentText, LineText, PageText
+from ..textextract import DocumentText, PageText, LineText
 from ..model import BudgetItem, FiscalYearBudget
 import re
 import logging
 
 logger = logging.getLogger(__name__)
 
-
+"""
 class LineWrapper:
     def __init__(self, line, page: PageText):
         self.line = line
@@ -18,10 +18,11 @@ class LineWrapper:
 
     def __repr__(self):
         return repr(self.line)
+"""
 
 
 class LineItem:
-    def __init__(self, itemtype: str, lines: List[LineWrapper]):
+    def __init__(self, itemtype: str, lines: List['LineText']):
         self.itemtype = itemtype
         self.lines = lines
         self.page_index = lines[0].page.page_index
@@ -34,11 +35,18 @@ class LineItem:
 
     @property
     def x1(self):
-        return max(line.line.x1 for line in self.lines)
+        return max(line.x1 for line in self.lines)
 
     @property
     def x0(self):
-        return min(line.line.x0 for line in self.lines)
+        return min(line.x0 for line in self.lines)
+
+    @property
+    def document(self):
+        for line in self.lines:
+            if line.page and line.page.document:
+                return line.page.document.filepath
+        return None
 
     def __str__(self) -> str:
         return ''.join(
@@ -57,6 +65,7 @@ class LineItem:
         }
 
 
+
 def get_amount_from_string(text: str) -> float:
     pattern = r'(\d{1,3}(?:,\d{3})*(?:\.\d+)?) บาท'
     match = re.search(pattern, text)
@@ -65,6 +74,20 @@ def get_amount_from_string(text: str) -> float:
     else:
         return 0.0
 
+
+def get_year_from_string(text: str) -> Tuple[int, int]:
+    # ปี 2563 ตั�งงบประมาณ 616,834,700 บาท -> 2563, 2563
+    # ปี 2563-2564 ตั�งงบประมาณ 616,834,700 บาท -> 2563, 2564
+    pattern = r'ปี (\d{4})(?:-(\d{4}))?'
+
+    match = re.search(pattern, text)
+    if match:
+        if match.group(2):
+            return int(match.group(1)), int(match.group(2))
+        else:
+            return int(match.group(1)), int(match.group(1))
+    else:
+        return 0, 0
 
 def get_patern_of_bullet(String):
     regx = [('[1-9][0-9]*(\.[1-9][0-9]*)*\)$', 20),
@@ -96,7 +119,7 @@ def is_redundant_line(line_text: List[str]):
         or 'รายละเอียดงบประมาณรายจ่ายจำแนกตามแผนงาน' in line_text)
 
 
-def get_entries(lines: List[LineWrapper]):
+def get_entries(lines: List[LineText]):
     # flags
     bullet_flag = False
     # project and output flag
@@ -259,6 +282,15 @@ def extract_tree_levels(bud_items: List[LineItem], x_diff_threshold=0.005) -> Bu
 
     for bud_item in bud_items:
         if bud_item.itemtype == 'fiscal_year':
+            last_node = parent_stack[-1]['node']
+            year_start, year_end = get_year_from_string(str(bud_item))
+            last_node.fiscal_year_budget.append(
+                FiscalYearBudget(
+                    year=year_start,
+                    amount=get_amount_from_string(str(bud_item)),
+                    year_end=year_end,
+                )
+            )
             continue
 
         while len(parent_stack) > 0 and parent_stack[-1]['level'] >= bud_item.level:
@@ -274,7 +306,7 @@ def extract_tree_levels(bud_items: List[LineItem], x_diff_threshold=0.005) -> Bu
             budget_type=itemtype_mapper[bud_item.itemtype],
             name=str(bud_item),
             amount=get_amount_from_string(str(bud_item)),
-            document='',
+            document=bud_item.document,
             page=bud_item.page_index,
             parent=parent,
         )
@@ -287,17 +319,6 @@ def extract_tree_levels(bud_items: List[LineItem], x_diff_threshold=0.005) -> Bu
     if len(root.children) == 1:
         return root.children[0]
     return root
-
-
-def read_lines(fpath: str) -> LineWrapper:
-    pages = DocumentText(fpath).pages
-
-    lines = []
-    for page in pages:
-        for line in page.lines:
-            lines.append(LineWrapper(line, page))
-
-    return lines
 
 
 def page_x1(entries: List[LineItem]):
