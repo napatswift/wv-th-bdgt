@@ -1,4 +1,4 @@
-from typing import List, Optional
+from typing import List, Optional, Callable
 import fitz
 from .text import WordText, PageText, LineText
 from ..tableparser import (
@@ -90,18 +90,34 @@ class DocumentText:
     def __init__(
             self,
             filepath: str,
+            lazy: bool = False,
         ) -> 'DocumentText':
         self.filepath = filepath
-        self.pages = self._read_pdf_file()
+        self.page_label_to_index = dict() # str as key
+        self.lazy = lazy
+        self.doc = None
+        self.pages = []
+        self._read_pdf_file()
 
     def _read_pdf_file(self,) -> List['PageText']:
         try:
             doc: fitz.Document = fitz.open(self.filepath)
         except fitz.fitz.FileNotFoundError as e:
             raise FileNotFoundError('File not found.') from e
+        
+        self.doc = doc
 
-        page_list: List['PageText'] = []
-        for pidx, page in enumerate(doc):
+        for pidx, page in enumerate(doc.pages()):
+            self.page_label_to_index[page.get_label()] = pidx
+            self.pages.append(None)
+            if self.lazy:
+                continue
+            self._load_page(pidx)
+    
+    def _load_page(self, page_index: int) -> 'PageText':
+        for pidx, page in enumerate(self.doc.pages()):
+            if pidx != page_index or self.pages[pidx] is not None:
+                continue
             word_tuples = page.get_text_words()
             page_width = page.rect.width
             page_height = page.rect.height
@@ -118,8 +134,7 @@ class DocumentText:
             grouped_lines = group_text_by_line(words, 0.01)
             list_of_line: List['LineText'] = []
 
-            for lidx, line in enumerate(grouped_lines):
-                words = line
+            for lidx, words in enumerate(grouped_lines):
                 if not words:
                     continue
                 list_of_line.append(LineText(words, pidx, lidx))
@@ -130,19 +145,32 @@ class DocumentText:
                                 height=page_height,
                                 is_image=is_image_page(page),
                                 document=self,)
+
             for line in pagetext.lines:
                 line.page = pagetext
 
             pagetext.contains_table = page_contains_table(page)
-            page_list.append(pagetext)
+            self.pages[pidx] = pagetext
 
-        return page_list
+    
+    def get_page(self: 'DocumentText', page_index: int) -> 'PageText':
+        if page_index < 0 or page_index >= len(self.pages):
+            raise IndexError('page_index must be in range [0, {})'.format(len(self.pages)))
+        if self.pages[page_index] is None:
+            self._load_page(page_index)
+        return self.pages[page_index]
 
     def get_lines_in_page(self: 'DocumentText', start: Optional[int]=None, end: Optional[int]=None) -> List['LineText']:
         if start is None:
             start = 0
+        elif isinstance(start, str):
+            start = self.page_label_to_index.get(start)
+            if start is None: raise IndexError('page {} not found in the doc'.format(repr(start)))
         if end is None:
             end = len(self.pages)
+        elif isinstance(end, str):
+            end = self.page_label_to_index.get(end)
+            if end is None: raise IndexError('page {} not found in the doc'.format(repr(end)))
 
         if start < 0 or start >= len(self.pages):
             raise IndexError('start must be in range [0, {})'.format(len(self.pages)))
@@ -151,7 +179,8 @@ class DocumentText:
             raise IndexError('end must be in range [0, {})'.format(len(self.pages)))
 
         lines = []
-        for page in self.pages[start:end]:
+        for idx in range(start, end):
+            page = self.get_page(idx)
             lines.extend(page.lines)
 
         return lines

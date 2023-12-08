@@ -199,7 +199,10 @@ def get_entries(lines: List[LineText]):
     ]
 
 
-def extract_tree_levels(bud_items: List[LineItem], x_diff_threshold=0.005) -> BudgetItem:
+def extract_tree_levels(
+        bud_items: List[LineItem],
+        x_diff_threshold=0.005,
+    ) -> BudgetItem:
     """
     Extracts the levels of the budget units.
     The levels are extracted by looking at the x0 positions of the budget units.
@@ -316,8 +319,6 @@ def extract_tree_levels(bud_items: List[LineItem], x_diff_threshold=0.005) -> Bu
             'level': bud_item.level,
         })
     
-    if len(root.children) == 1:
-        return root.children[0]
     return root
 
 
