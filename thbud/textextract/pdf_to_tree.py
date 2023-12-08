@@ -119,6 +119,14 @@ def is_redundant_line(line_text: List[str]):
         or 'รายละเอียดงบประมาณรายจ่ายจำแนกตามแผนงาน' in line_text)
 
 
+def check_proj_outp(target, line_text):
+    if line_text[0].replace(':', '') == target:
+        return True
+    if len(line_text) > 1 and line_text[1].startswith(target):
+        return True
+    return False
+
+
 def get_entries(lines: List[LineText]):
     # flags
     bullet_flag = False
@@ -171,15 +179,15 @@ def get_entries(lines: List[LineText]):
             # DEBUG
             logger.debug('get_entries::`{}` is bullet'.format(line))
 
-        if line_text[0].replace(':', '') == 'ผลผลิต' or (len(line_text) > 1 and line_text[1].replace(':', '') in 'ผลผลิต'):
+        if check_proj_outp('ผลผลิต', line_text):
             proj_outp_flag = 'OUTPUT'
-        
-        if line_text[0].replace(':', '') == 'โครงการ' or (len(line_text) > 1 and line_text[1].replace(':', '') in 'โครงการ'):
+
+        if check_proj_outp('โครงการ', line_text):
             proj_outp_flag = 'PROJECT'
 
         if proj_outp_flag:
             # DEBUG
-            logger.debug('get_entries::`{}` is proj/outp'.format(line))
+            logger.debug('get_entries::`{}` is `{}`'.format(line, proj_outp_flag))
 
         if bullet_flag or proj_outp_flag:
             entry.append(line_id)
@@ -192,8 +200,8 @@ def get_entries(lines: List[LineText]):
             if line_text[0].startswith('เงินนอกงบประมาณ'):
                 continue
 
-            # logger.debug('SKIPPED', 'page', line.page.page_index,
-            #              'line', line.line.line_index, '👉🏽', *line_text)
+            logger.warning('SKIPPED', 'page', line.page.page_index,
+                         'line', line.line.line_index, '👉🏽', *line_text)
     return [
         LineItem(t, lines) for t, lines in entries
     ]
