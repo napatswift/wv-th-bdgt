@@ -55,7 +55,7 @@ class LineItem:
 
     def __repr__(self) -> str:
         return 'LineItem({}, {})'.format(self.itemtype, repr(self.lines))
-    
+
     def to_json(self):
         return {
             'itemtype': self.itemtype,
@@ -63,7 +63,6 @@ class LineItem:
             'page_index': self.page_index,
             'level': self.level,
         }
-
 
 
 def get_amount_from_string(text: str) -> float:
@@ -89,6 +88,7 @@ def get_year_from_string(text: str) -> Tuple[int, int]:
     else:
         return 0, 0
 
+
 def get_patern_of_bullet(String):
     regx = [('[1-9][0-9]*(\.[1-9][0-9]*)*\)$', 20),
             ('\(\d*(\.?\d*)*\)$', 50),
@@ -109,14 +109,21 @@ def is_classifier(string):
 
 
 def is_redundant_line(line_text: List[str]):
-    return (
-        not line_text
-        or 'รายละเอียดงบประมาณจำแนกตามงบรายจ่าย' in line_text
-        or 'รายละเอียดงบประมาณจําแนกตามงบรายจ่าย' in line_text
-        or 'รายการบุคลากรภาครัฐ' in line_text
-        or 'วงเงินทั้งสิ้น' in line_text
-        or 'วงเงินทั�งสิ�น' in line_text
-        or 'รายละเอียดงบประมาณรายจ่ายจำแนกตามแผนงาน' in line_text)
+    if not line_text or ' '.join(line_text).isdigit():
+        return True
+
+    for text in line_text:
+        if text in ['รายละเอียดงบประมาณจำแนกตามงบรายจ่าย',
+                    'รายละเอียดงบประมาณจําแนกตามงบรายจ่าย',
+                    'รายละเ�ียดงบประมาณจ�าแนก�ามงบรายจ่าย',
+                    'รายการบุคลากรภาครัฐ',
+                    'รายการบ�คลากร�าครั�',
+                    'วงเงินทั้งสิ้น',
+                    'วงเงินทั�งสิ�น',
+                    'รายละเอียดงบประมาณ',
+                    'รายละเอียดงบประมาณรายจ่ายจำแนกตามแผนงาน']:
+            return True
+    return False
 
 
 def check_proj_outp(target, line_text):
@@ -145,13 +152,6 @@ def get_entries(lines: List[LineText]):
         # joint line together
         line_text = str(line)
 
-        if line_text == 'i ||| .':
-            continue
-        if line_text.isdigit():
-            continue
-        if line_text == '3. รายละเอียดงบประมาณ':
-            continue
-
         # then split by whitespace
         line_text = line_text.split()
 
@@ -179,7 +179,10 @@ def get_entries(lines: List[LineText]):
             # DEBUG
             logger.debug('get_entries::`{}` is bullet'.format(line))
 
-        if check_proj_outp('ผลผลิต', line_text):
+        if (check_proj_outp('ผลผลิต', line_text) or
+                check_proj_outp('ผลผลิ�', line_text) or
+                check_proj_outp('�ล�ลิต', line_text)
+            ):
             proj_outp_flag = 'OUTPUT'
 
         if check_proj_outp('โครงการ', line_text):
@@ -187,12 +190,14 @@ def get_entries(lines: List[LineText]):
 
         if proj_outp_flag:
             # DEBUG
-            logger.debug('get_entries::`{}` is `{}`'.format(line, proj_outp_flag))
+            logger.debug('get_entries::`{}` is `{}`'.format(
+                line, proj_outp_flag))
 
         if bullet_flag or proj_outp_flag:
             entry.append(line_id)
             if line_text[-1].replace('-', '') == 'บาท':
-                entries.append(('item' if bullet_flag else proj_outp_flag, entry))
+                entries.append(
+                    ('item' if bullet_flag else proj_outp_flag, entry))
                 bullet_flag = False
                 proj_outp_flag = False
                 entry = []
@@ -200,29 +205,23 @@ def get_entries(lines: List[LineText]):
             if line_text[0].startswith('เงินนอกงบประมาณ'):
                 continue
 
-            logger.warning('SKIPPED', 'page', line.page.page_index,
-                         'line', line.line.line_index, '👉🏽', *line_text)
+            logger.warning(
+                f'SKIPPED page {line.page.page_index}, line {line.line_index} 👉🏽 {line_text}')
     return [
         LineItem(t, lines) for t, lines in entries
     ]
 
 
-def extract_tree_levels(
-        bud_items: List[LineItem],
-        x_diff_threshold=0.005,
-    ) -> BudgetItem:
-    """
-    Extracts the levels of the budget units.
-    The levels are extracted by looking at the x0 positions of the budget units.
-    """
+def add_level_to_entries_positions(entries: List[LineItem],):
+    x_diff_threshold = 0.005
 
     # stores min x position
     stack_x = []
 
-    page_end_x_sr = page_x1(bud_items)
+    page_end_x_sr = page_x1(entries)
     page_x1_max = max(page_end_x_sr.values())
 
-    for bud_item in bud_items:
+    for bud_item in entries:
         # LOGGING
         logger.debug(f'extract_tree_levels::{(bud_item)}')
 
@@ -231,7 +230,7 @@ def extract_tree_levels(
             # In this case, we clear the stack and add a new level to the levels list.
             if bud_item.itemtype in ['budget_plan', 'PROJECT', 'OUTPUT']:
                 stack_x = []
-            
+
             if bud_item.itemtype == 'budget_plan':
                 bud_item.set_level(-2)
             elif bud_item.itemtype == 'PROJECT' or bud_item.itemtype == 'OUTPUT':
@@ -271,6 +270,16 @@ def extract_tree_levels(
         logger.debug('extract_tree_levels::level: {}'.format(bud_item.level))
 
 
+def extract_tree_levels(
+    bud_items: List[LineItem],
+) -> BudgetItem:
+    """
+    Extracts the levels of the budget units.
+    The levels are extracted by looking at the x0 positions of the budget units.
+    """
+
+    add_level_to_entries_positions(bud_items)
+
     itemtype_mapper = {
         'budget_plan': 'BUDGET_PLAN',
         'PROJECT': 'PROJECT',
@@ -309,7 +318,7 @@ def extract_tree_levels(
 
         if len(parent_stack) == 0:
             parent = None
-        
+
         else:
             parent = parent_stack[-1]['node']
 
@@ -326,7 +335,7 @@ def extract_tree_levels(
             'node': node,
             'level': bud_item.level,
         })
-    
+
     return root
 
 
