@@ -116,8 +116,11 @@ def is_redundant_line(line_text: List[str]):
         if text in ['รายละเอียดงบประมาณจำแนกตามงบรายจ่าย',
                     'รายละเอียดงบประมาณจําแนกตามงบรายจ่าย',
                     'รายละเ�ียดงบประมาณจ�าแนก�ามงบรายจ่าย',
+                    'รายละเอ�ยดงบ�ระมา��ำแนก�ามงบราย��าย',
                     'รายการบุคลากรภาครัฐ',
                     'รายการบ�คลากร�าครั�',
+                    'รายการบ�คลากร�าครัฐ',
+                    'รายการบุคลากรภาครั�',
                     'วงเงินทั้งสิ้น',
                     'วงเงินทั�งสิ�น',
                     'รายละเอียดงบประมาณ',
@@ -181,11 +184,15 @@ def get_entries(lines: List[LineText]):
 
         if (check_proj_outp('ผลผลิต', line_text) or
                 check_proj_outp('ผลผลิ�', line_text) or
+                check_proj_outp('�ล�ลิ�', line_text) or
                 check_proj_outp('�ล�ลิต', line_text)
             ):
             proj_outp_flag = 'OUTPUT'
 
-        if check_proj_outp('โครงการ', line_text):
+        if (check_proj_outp('โครงการ', line_text) or
+            check_proj_outp('�ครงการ', line_text) or
+            check_proj_outp('��รงการ', line_text)
+            ):
             proj_outp_flag = 'PROJECT'
 
         if proj_outp_flag:
