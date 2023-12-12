@@ -169,7 +169,12 @@ def get_entries(lines: List[LineText]):
             continue
 
         patern_of_bullet = get_patern_of_bullet(line_text[0])
-        if re.match(r'ป?ี \d{4} ', ' '.join(line_text)):
+        if (re.match(r'ป?ี \d{4} ', ' '.join(line_text))
+                or 'ตั้งงบประมาณ' in line_text
+                or '�ั้งงบ�ร�มา�' in line_text
+                or '��กพันงบ�ร�มา�' in line_text
+                or 'ผูกพันงบประมาณ' in line_text
+            ):
             entries.append(('fiscal_year', [line_id]))
 
             # DEBUG
@@ -183,9 +188,9 @@ def get_entries(lines: List[LineText]):
             logger.debug('get_entries::`{}` is bullet'.format(line))
 
         if (check_proj_outp('ผลผลิต', line_text) or
-                check_proj_outp('ผลผลิ�', line_text) or
-                check_proj_outp('�ล�ลิ�', line_text) or
-                check_proj_outp('�ล�ลิต', line_text)
+            check_proj_outp('ผลผลิ�', line_text) or
+            check_proj_outp('�ล�ลิ�', line_text) or
+            check_proj_outp('�ล�ลิต', line_text)
             ):
             proj_outp_flag = 'OUTPUT'
 
