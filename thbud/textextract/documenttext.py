@@ -90,7 +90,7 @@ def page_contains_table(page: fitz.Page) -> bool:
     return len(extract_tables(rects)) > 0
 
 
-def defualt_words_loader(page: fitz.Page) -> List[WordText]:
+def defualt_words_loader(page: fitz.Page) -> List[Tuple[float, float, float, float, str]]:
     word_tuples = page.get_text_words()
     words = []
     for word in word_tuples:
