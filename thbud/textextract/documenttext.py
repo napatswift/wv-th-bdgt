@@ -90,16 +90,6 @@ def page_contains_table(page: fitz.Page) -> bool:
     return len(extract_tables(rects)) > 0
 
 
-def defualt_words_loader(page: fitz.Page) -> List[Tuple[float, float, float, float, str]]:
-    word_tuples = page.get_text_words()
-    words = []
-    for word in word_tuples:
-        x0, y0, x1, y1, text = word[:5]
-        words.append((x0, y0, x1, y1, text))
-
-    return words
-
-
 class DocumentText:
     def __init__(
         self,
@@ -113,9 +103,18 @@ class DocumentText:
         self.doc = None
         self.pages = []
         if words_loader is None:
-            words_loader = defualt_words_loader
+            words_loader = self.defualt_words_loader
         self.words_loader = words_loader
         self._read_pdf_file()
+
+    def defualt_words_loader(self, page: fitz.Page) -> List[Tuple[float, float, float, float, str]]:
+        word_tuples = page.get_text_words()
+        words = []
+        for word in word_tuples:
+            x0, y0, x1, y1, text = word[:5]
+            words.append((x0, y0, x1, y1, text))
+
+        return words
         
 
     def _read_pdf_file(self,) -> List['PageText']:
