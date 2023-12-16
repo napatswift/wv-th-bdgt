@@ -1,10 +1,11 @@
-from typing import List, Optional, Callable
+from typing import List, Optional, Callable, Tuple
 import fitz
 from .text import WordText, PageText, LineText
 from ..tableparser import (
     extract_tables
 )
 from typing import List
+
 
 def group_text_by_line(text_list: List[WordText], threshold=0.01):
     """
@@ -25,7 +26,7 @@ def group_text_by_line(text_list: List[WordText], threshold=0.01):
     for word in text_list:
         # If previous y0 is None, set it to y0.
         if prev_y0 is None:
-          prev_y0 = word.y0
+            prev_y0 = word.y0
 
         # If current y0 - previous y0 > threshold,
         # add current line to line list and start a new line.
@@ -48,6 +49,7 @@ def group_text_by_line(text_list: List[WordText], threshold=0.01):
         line.sort(key=lambda x: x.x0)
 
     return line_list
+
 
 def is_image_page(page: fitz.Page) -> bool:
     """
@@ -82,29 +84,46 @@ def is_image_page(page: fitz.Page) -> bool:
     # then it's an image page.
     return image_size / page_size > theshold
 
+
 def page_contains_table(page: fitz.Page) -> bool:
     rects = [d['rect'] for d in page.get_drawings()]
     return len(extract_tables(rects)) > 0
 
+
+def defualt_words_loader(page: fitz.Page) -> List[WordText]:
+    word_tuples = page.get_text_words()
+    words = []
+    for word in word_tuples:
+        x0, y0, x1, y1, text = word[:5]
+        words.append((x0, y0, x1, y1, text))
+
+    return words
+
+
 class DocumentText:
     def __init__(
-            self,
-            filepath: str,
-            lazy: bool = False,
-        ) -> 'DocumentText':
+        self,
+        filepath: str,
+        words_loader: Optional[Callable[[fitz.Page], List[Tuple[float, float, float, float, str]]]] = None,
+        lazy: bool = False,
+    ) -> 'DocumentText':
         self.filepath = filepath
-        self.page_label_to_index = dict() # str as key
+        self.page_label_to_index = dict()  # str as key
         self.lazy = lazy
         self.doc = None
         self.pages = []
+        if words_loader is None:
+            words_loader = defualt_words_loader
+        self.words_loader = words_loader
         self._read_pdf_file()
+        
 
     def _read_pdf_file(self,) -> List['PageText']:
         try:
             doc: fitz.Document = fitz.open(self.filepath)
         except fitz.fitz.FileNotFoundError as e:
             raise FileNotFoundError('File not found.') from e
-        
+
         self.doc = doc
 
         for pidx, page in enumerate(doc.pages()):
@@ -113,36 +132,35 @@ class DocumentText:
             if self.lazy:
                 continue
             self._load_page(pidx)
-    
+
     def _load_page(self, page_index: int) -> 'PageText':
         for pidx, page in enumerate(self.doc.pages()):
             if pidx != page_index or self.pages[pidx] is not None:
                 continue
-            word_tuples = page.get_text_words()
+            
+            word_tuples = self.words_loader(page)
             page_width = page.rect.width
             page_height = page.rect.height
 
             words = []
             for word in word_tuples:
-                x0, y0, x1, y1, text = word[:5]
+                x0, y0, x1, y1, text = word
                 x0 = x0 / page_width
                 x1 = x1 / page_width
                 y0 = y0 / page_height
                 y1 = y1 / page_height
                 words.append(WordText(x0, y0, x1, y1, text))
-
             grouped_lines = group_text_by_line(words, 0.01)
             list_of_line: List['LineText'] = []
 
             for lidx, words in enumerate(grouped_lines):
-                if not words:
-                    continue
-                list_of_line.append(LineText(words, pidx, lidx))
+                if words:
+                    list_of_line.append(LineText(words, pidx, lidx))
 
             pagetext = PageText(lines=list_of_line,
                                 page_index=pidx,
-                                width=page_width,
-                                height=page_height,
+                                width=page.rect.width,
+                                height=page.rect.height,
                                 is_image=is_image_page(page),
                                 document=self,)
 
@@ -152,31 +170,37 @@ class DocumentText:
             pagetext.contains_table = page_contains_table(page)
             self.pages[pidx] = pagetext
 
-    
     def get_page(self: 'DocumentText', page_index: int) -> 'PageText':
         if page_index < 0 or page_index >= len(self.pages):
-            raise IndexError('page_index must be in range [0, {})'.format(len(self.pages)))
+            raise IndexError('page_index must be in range [0, {})'.format(
+                len(self.pages)))
         if self.pages[page_index] is None:
             self._load_page(page_index)
         return self.pages[page_index]
 
-    def get_lines_in_page(self: 'DocumentText', start: Optional[int]=None, end: Optional[int]=None) -> List['LineText']:
+    def get_lines_in_page(self: 'DocumentText', start: Optional[int] = None, end: Optional[int] = None) -> List['LineText']:
         if start is None:
             start = 0
         elif isinstance(start, str):
             start = self.page_label_to_index.get(start)
-            if start is None: raise IndexError('page {} not found in the doc'.format(repr(start)))
+            if start is None:
+                raise IndexError(
+                    'page {} not found in the doc'.format(repr(start)))
         if end is None:
             end = len(self.pages)
         elif isinstance(end, str):
             end = self.page_label_to_index.get(end)
-            if end is None: raise IndexError('page {} not found in the doc'.format(repr(end)))
+            if end is None:
+                raise IndexError(
+                    'page {} not found in the doc'.format(repr(end)))
 
         if start < 0 or start >= len(self.pages):
-            raise IndexError('start must be in range [0, {})'.format(len(self.pages)))
+            raise IndexError('start must be in range [0, {})'.format(
+                len(self.pages)))
 
         if end < 0 or end > len(self.pages):
-            raise IndexError('end must be in range [0, {})'.format(len(self.pages)))
+            raise IndexError('end must be in range [0, {})'.format(
+                len(self.pages)))
 
         lines = []
         for idx in range(start, end):
