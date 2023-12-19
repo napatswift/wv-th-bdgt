@@ -84,9 +84,11 @@ def is_image_page(page: fitz.Page) -> bool:
     # then it's an image page.
     return image_size / page_size > theshold
 
+def is_rect_inside_page(rect, page_width, page_height):
+    return rect.x0 >= 0 and rect.x1 <= page_width and rect.y0 >= 0 and rect.y1 <= page_height
 
 def page_contains_table(page: fitz.Page) -> bool:
-    rects = [d['rect'] for d in page.get_drawings()]
+    rects = [d['rect'] for d in page.get_drawings() if is_rect_inside_page(d['rect'], page.rect.width, page.rect.height)]
     return len(extract_tables(rects)) > 0
 
 

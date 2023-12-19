@@ -32,13 +32,17 @@ def test_dfs():
       4: [],
   }, 0) == 0
 
+def is_rect_inside_page(rect, page_width, page_height):
+    return rect.x0 >= 0 and rect.x1 <= page_width and rect.y0 >= 0 and rect.y1 <= page_height
+
 def extract_tables_test(filename: str, num_tables: int):
     doc = fitz.open(filename)
     page = doc[0]  # first page
 
     # get the lines
-    rects = [d['rect'] for d in page.get_drawings()]
+    rects = [d['rect'] for d in page.get_drawings() if is_rect_inside_page(d['rect'], page.rect.width, page.rect.height)]
     tables = extract_tables(rects)
+    print([[r.width*r.height for r in tab.rects] for tab in tables])
     assert len(tables) == num_tables
 
 def test_extract_1_table():
@@ -46,4 +50,7 @@ def test_extract_1_table():
 
 def test_extract_2_tables():
   extract_tables_test("test/table-parser/pdf/pdf-2table.pdf", 2)
+
+def test_extract_0_table():
+  extract_tables_test("test/table-parser/pdf/pdf-0table-contain-outside-page-table.pdf", 0)
 
