@@ -1,5 +1,6 @@
 from .model import BudgetItem, BudgetType
 from anytree import PreOrderIter
+import re
 
 def build_csv(root: BudgetItem):
     """
@@ -60,3 +61,24 @@ def build_csv(root: BudgetItem):
                 result.append(row)
 
     return result
+
+def extract_budget_item_name(line_string: str):
+    if line_string.startswith('ผลผลิต :'):
+        line_string = line_string[9:]
+
+    if line_string.startswith('โครงการ :'):
+        line_string = line_string[9:]
+
+    # remove bullet
+    regex_bullet = r'^[\d\.\s\(\) ]+'
+    if re.match(regex_bullet, line_string):
+        line_string = re.sub(regex_bullet, '', line_string)
+
+    # remove amount
+    regex_amount = r'([\d,\.]+ )+บาท( บาท)*'
+    line_string = re.sub(regex_amount, '', line_string)
+
+    regex_extrac_chars = '[\*\-\.:\(\)\d\s]+'
+    line_string = re.sub('^'+regex_extrac_chars, '', line_string)
+    line_string = re.sub(regex_extrac_chars+'$', '', line_string)
+    return line_string.strip()
