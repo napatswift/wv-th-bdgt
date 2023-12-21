@@ -143,6 +143,7 @@ class BudgetItem(NodeMixin):
 
                 ancestry_stack[-1]['node'].fiscal_year_budget.append(
                     FiscalYearBudget(
+                        line=row[f'name_{ancestry_stack[-1]["level"]}'],
                         year=row['fiscal_year'],
                         year_end=row['fiscal_year_end'],
                         amount=row['amount'],
@@ -236,7 +237,8 @@ class FiscalYearBudget:
     :param amount: จำนวนงบ
     """
 
-    def __init__(self, year: int, amount: float, year_end: Optional[int] = None):
+    def __init__(self, line: str, year: int, amount: float, year_end: Optional[int] = None):
+        self.line = line
         self.year = year
         if year_end is not None:
             self.year_end = year_end
@@ -253,6 +255,7 @@ class FiscalYearBudget:
     @classmethod
     def from_json(cls, json_obj):
         return cls(
+            line=json_obj['line'],
             year=json_obj['year'],
             year_end=json_obj.get('year_end'),
             amount=json_obj['amount'],
@@ -260,6 +263,7 @@ class FiscalYearBudget:
     
     def to_json(self):
         return {
+            'line': self.line,
             'year': self.year,
             'year_end': self.year_end,
             'amount': self.amount,
@@ -269,7 +273,7 @@ class FiscalYearBudget:
         return {
             'error_message': '',
             'budget_type': 'FISCAL_YEAR_BUDGET',
-            f'name_{depth}': str(self),
+            f'name_{depth}': self.line,
             'fiscal_year': self.year,
             'fiscal_year_end': self.year_end,
             'amount': self.amount,

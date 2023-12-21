@@ -31,6 +31,7 @@ def test_build_with_fiscal_year_budgets():
         page=1,
         fiscal_year_budget=[
             FiscalYearBudget(
+                'ปี 2563 ตั้งงบประมาณ 1000 บาท',
                 year=2563,
                 amount=1000,
             )
@@ -50,7 +51,7 @@ def test_build_with_fiscal_year_budgets():
         },
         {
             'error_message': '',
-            'name_1': '2563',
+            'name_1': 'ปี 2563 ตั้งงบประมาณ 1000 บาท',
             'budget_type': 'FISCAL_YEAR_BUDGET',
             'amount': 1000,
             'fiscal_year': 2563,
@@ -67,10 +68,12 @@ def test_build_with_2_fiscal_year_budgets():
         page=1,
         fiscal_year_budget=[
             FiscalYearBudget(
+                line='ปี 2563 ตั้งงบประมาณ 1000 บาท',
                 year=2563,
                 amount=1000,
             ),
             FiscalYearBudget(
+                line='ปี 2564 ตั้งงบประมาณ 1000 บาท',
                 year=2564,
                 amount=1000,
             )
@@ -90,7 +93,7 @@ def test_build_with_2_fiscal_year_budgets():
         },
         {
             'error_message': '',
-            'name_1': '2563',
+            'name_1': 'ปี 2563 ตั้งงบประมาณ 1000 บาท',
             'budget_type': 'FISCAL_YEAR_BUDGET',
             'amount': 1000,
             'fiscal_year': 2563,
@@ -98,7 +101,7 @@ def test_build_with_2_fiscal_year_budgets():
         },
         {
             'error_message': '',
-            'name_1': '2564',
+            'name_1': 'ปี 2564 ตั้งงบประมาณ 1000 บาท',
             'budget_type': 'FISCAL_YEAR_BUDGET',
             'amount': 1000,
             'fiscal_year': 2564,
@@ -115,10 +118,12 @@ def test_build_with_2_fiscal_year_budgets_with_different_amount():
         page=1,
         fiscal_year_budget=[
             FiscalYearBudget(
+                line='ปี 2563 ตั้งงบประมาณ 1000 บาท',
                 year=2563,
                 amount=1000,
             ),
             FiscalYearBudget(
+                line='ปี 2564 ตั้งงบประมาณ 2000 บาท',
                 year=2564,
                 amount=2000,
             )
@@ -138,7 +143,7 @@ def test_build_with_2_fiscal_year_budgets_with_different_amount():
         },
         {
             'error_message': '',
-            'name_1': '2563',
+            'name_1': 'ปี 2563 ตั้งงบประมาณ 1000 บาท',
             'budget_type': 'FISCAL_YEAR_BUDGET',
             'amount': 1000,
             'fiscal_year': 2563,
@@ -146,7 +151,7 @@ def test_build_with_2_fiscal_year_budgets_with_different_amount():
         },
         {
             'error_message': '',
-            'name_1': '2564',
+            'name_1': 'ปี 2564 ตั้งงบประมาณ 2000 บาท',
             'budget_type': 'FISCAL_YEAR_BUDGET',
             'amount': 2000,
             'fiscal_year': 2564,
@@ -265,6 +270,7 @@ def test_build_with_child_that_has_fiscal_year():
                 page=1,
                 fiscal_year_budget=[
                     FiscalYearBudget(
+                        line='ปี 2563 ตั้งงบประมาณ 1000 บาท',
                         year=2563,
                         amount=1000,
                     )
@@ -294,7 +300,7 @@ def test_build_with_child_that_has_fiscal_year():
         },
         {
             'error_message': '',
-            'name_2': '2563',
+            'name_2': 'ปี 2563 ตั้งงบประมาณ 1000 บาท',
             'budget_type': 'FISCAL_YEAR_BUDGET',
             'amount': 1000,
             'fiscal_year': 2563,

@@ -116,6 +116,7 @@ def test_create_node_with_fiscal_year_budget():
     page=1,
     fiscal_year_budget=[
       FiscalYearBudget(
+        line='ปี 2563 ตั้งงบประมาณ 1,000 บาท',
         year=2563,
         amount=1000,
       )
@@ -216,6 +217,7 @@ def test_generate_json_with_fiscal_year_budget():
     page=1,
     fiscal_year_budget=[
       FiscalYearBudget(
+        line='ปี 2563 ตั้งงบประมาณ 1,000 บาท',
         year=2563,
         amount=1000,
       )
@@ -232,6 +234,7 @@ def test_generate_json_with_fiscal_year_budget():
     'page': 1,
     'fiscal_year_budget': [
       {
+        'line': 'ปี 2563 ตั้งงบประมาณ 1,000 บาท',
         'year': 2563,
         'amount': 1000,
         'year_end': 2563,
@@ -258,6 +261,7 @@ def test_generate_json_with_children_and_fiscal_year_budget():
     ],
     fiscal_year_budget=[
       FiscalYearBudget(
+        line='ปี 2563 ตั้งงบประมาณ 1,000 บาท',
         year=2563,
         amount=1000,
       )
@@ -274,6 +278,7 @@ def test_generate_json_with_children_and_fiscal_year_budget():
     'page': 1,
     'fiscal_year_budget': [
       {
+        'line': 'ปี 2563 ตั้งงบประมาณ 1,000 บาท',
         'year': 2563,
         'amount': 1000,
         'year_end': 2563,

@@ -233,10 +233,12 @@ def test_build_csv_with_fiscal_year_budget():
                                                 12,
                                                 fiscal_year_budget=[
                                                     FiscalYearBudget(
+                                                        'ปี 2563 50 บาท',
                                                         2563,
                                                         50,
                                                     ),
                                                     FiscalYearBudget(
+                                                        'ปี 2564 20 บาท',
                                                         2564,
                                                         20,
                                                     ),
