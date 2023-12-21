@@ -215,7 +215,9 @@ def get_entries(lines: List[LineText]):
                 proj_outp_flag = False
                 entry = []
         else:
-            if line_text[0].startswith('เงินนอกงบประมาณ'):
+            if ('เงินนอกงบประมาณ' in line_text
+                or 'เงินงบประมาณ' in line_text
+                ):
                 continue
 
             logger.warning(
