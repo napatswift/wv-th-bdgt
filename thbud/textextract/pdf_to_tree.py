@@ -321,6 +321,7 @@ def extract_tree_levels(
             year_start, year_end = get_year_from_string(str(bud_item))
             last_node.fiscal_year_budget.append(
                 FiscalYearBudget(
+                    line=str(bud_item),
                     year=year_start,
                     amount=get_amount_from_string(str(bud_item)),
                     year_end=year_end,
