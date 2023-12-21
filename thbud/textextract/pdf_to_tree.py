@@ -218,6 +218,7 @@ def get_entries(lines: List[LineText]):
                 entry = []
         else:
             if ('เงินนอกงบประมาณ' in line_text
+                or 'เงินน�กงบประมาณ' in line_text
                 or 'เงินงบประมาณ' in line_text
                 ):
                 continue
