@@ -77,7 +77,8 @@ def get_amount_from_string(text: str) -> float:
 def get_year_from_string(text: str) -> Tuple[int, int]:
     # ปี 2563 ตั�งงบประมาณ 616,834,700 บาท -> 2563, 2563
     # ปี 2563-2564 ตั�งงบประมาณ 616,834,700 บาท -> 2563, 2564
-    pattern = r'ปี (\d{4})(?:-(\d{4}))?'
+    # ปี 2563 - 2564 ตั�งงบประมาณ 616,834,700 บาท -> 2563, 2564
+    pattern = r'ปี (\d{4})(?: ?- ?(\d{4}))?'
 
     match = re.search(pattern, text)
     if match:
