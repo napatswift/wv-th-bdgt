@@ -92,8 +92,6 @@ def page_contains_table(page: fitz.Page) -> bool:
     pix = page.get_pixmap()
     image = np.frombuffer(pix.samples, dtype=np.uint8).reshape(pix.h, pix.w, pix.n)
     return has_table(image)
-    rects = [d['rect'] for d in page.get_drawings() if is_rect_inside_page(d['rect'], page.rect.width, page.rect.height)]
-    return len(extract_tables(rects)) > 0
 
 class DocumentText:
     def __init__(
