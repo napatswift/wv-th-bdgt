@@ -5,3 +5,4 @@ mock
 anytree
 pandas
 openpyxl
+opencv-python
