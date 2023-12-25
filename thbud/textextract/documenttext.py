@@ -2,10 +2,11 @@ from typing import List, Optional, Callable, Tuple
 import fitz
 from .text import WordText, PageText, LineText
 from ..tableparser import (
-    extract_tables
+    has_table
 )
 from typing import List
-
+import cv2
+import numpy as np
 
 def group_text_by_line(text_list: List[WordText], threshold=0.01):
     """
@@ -88,9 +89,11 @@ def is_rect_inside_page(rect, page_width, page_height):
     return rect.x0 >= 0 and rect.x1 <= page_width and rect.y0 >= 0 and rect.y1 <= page_height
 
 def page_contains_table(page: fitz.Page) -> bool:
+    pix = page.get_pixmap()
+    image = np.frombuffer(pix.samples, dtype=np.uint8).reshape(pix.h, pix.w, pix.n)
+    return has_table(image)
     rects = [d['rect'] for d in page.get_drawings() if is_rect_inside_page(d['rect'], page.rect.width, page.rect.height)]
     return len(extract_tables(rects)) > 0
-
 
 class DocumentText:
     def __init__(
