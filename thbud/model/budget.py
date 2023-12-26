@@ -160,14 +160,17 @@ class BudgetItem(NodeMixin):
             else:
                 parent = ancestry_stack[-1]['node']
 
-            node = cls(
-                budget_type=row['budget_type'],
-                name=row[f'name_{curr_level}'],
-                amount=row.get('amount'),
-                document=row.get('document'),
-                page=row.get('page'),
-                parent=parent,
-            )
+            try:
+                node = cls(
+                    budget_type=row['budget_type'],
+                    name=row[f'name_{curr_level}'],
+                    amount=row.get('amount'),
+                    document=row.get('document'),
+                    page=row.get('page'),
+                    parent=parent,
+                )
+            except ValueError as e:
+                raise ValueError(f'Error while creating node from row {row}') from e
 
             ancestry_stack.append({
                 'node': node,
