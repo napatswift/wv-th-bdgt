@@ -66,12 +66,12 @@ def extract_budget_item_name(line_string: str):
     if line_string.startswith('ผลผลิต :'):
         line_string = line_string[9:]
 
-    line_string = re.sub('[0-9\.]+\s+ผลผลิต(ที่)?\s+(\d+\s+)?:', '', line_string)
+    line_string = re.sub('([0-9\.]+\s+)?ผลผลิต(ที่)?\s+(\d+\s+)?:', '', line_string)
 
     if line_string.startswith('โครงการ :'):
         line_string = line_string[9:]
 
-    line_string = re.sub('[0-9\.]+\s+โครงการ(ที่)?\s+(\d+\s+)?:', '', line_string)
+    line_string = re.sub('([0-9\.]+\s+)?โครงการ(ที่)?\s+(\d+\s+)?:', '', line_string)
 
     # remove bullet
     regex_bullet = r'^[\d\s\(\)\. ]+'
