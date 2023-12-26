@@ -141,9 +141,10 @@ class BudgetItem(NodeMixin):
                 if len(ancestry_stack) == 0 or ancestry_stack[-1]['level'] < 1:
                     raise ValueError('FISCAL_YEAR_BUDGET must have parent')
 
+                curr_level = get_level_from_columns(row.keys())
                 ancestry_stack[-1]['node'].fiscal_year_budget.append(
                     FiscalYearBudget(
-                        line=row[f'name_{ancestry_stack[-1]["level"]}'],
+                        line=row[f'name_{curr_level}'],
                         year=row['fiscal_year'],
                         year_end=row['fiscal_year_end'],
                         amount=row['amount'],
