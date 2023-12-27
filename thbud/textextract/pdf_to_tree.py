@@ -49,7 +49,7 @@ class LineItem:
         return None
 
     def __str__(self) -> str:
-        return ''.join(
+        return ' '.join(
             [str(line) for line in self.lines]
         )
 
