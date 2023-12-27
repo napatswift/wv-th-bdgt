@@ -194,7 +194,7 @@ class DocumentText:
             end = self.page_label_to_index.get(end)
             if end is None:
                 raise IndexError(
-                    'page {} not found in the doc {}'.format(repr(end)), self.filepath)
+                    'page {} not found in the doc {}'.format(repr(end), self.filepath))
 
         if start < 0 or start >= len(self.pages):
             raise IndexError('start must be in range [0, {})'.format(
