@@ -124,7 +124,7 @@ class DocumentText:
         try:
             doc: fitz.Document = fitz.open(self.filepath)
         except fitz.fitz.FileNotFoundError as e:
-            raise FileNotFoundError('File not found.') from e
+            raise FileNotFoundError('File not found: {}'.format(self.filepath)) from e
 
         self.doc = doc
 
@@ -187,14 +187,14 @@ class DocumentText:
             start = self.page_label_to_index.get(start)
             if start is None:
                 raise IndexError(
-                    'page {} not found in the doc'.format(repr(start)))
+                    'page {} not found in the doc {}'.format(repr(start), self.filepath))
         if end is None:
             end = len(self.pages)
         elif isinstance(end, str):
             end = self.page_label_to_index.get(end)
             if end is None:
                 raise IndexError(
-                    'page {} not found in the doc'.format(repr(end)))
+                    'page {} not found in the doc {}'.format(repr(end)), self.filepath)
 
         if start < 0 or start >= len(self.pages):
             raise IndexError('start must be in range [0, {})'.format(
