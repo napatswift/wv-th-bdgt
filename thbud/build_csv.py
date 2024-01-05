@@ -62,7 +62,7 @@ def build_csv(root: BudgetItem):
 
     return result
 
-def extract_budget_item_name(line_string: str):
+def extract_budget_item_name(line_string: str, double_amount: bool = False):
     if line_string.startswith('ผลผลิต :'):
         line_string = line_string[9:]
 
@@ -79,7 +79,9 @@ def extract_budget_item_name(line_string: str):
         line_string = re.sub(regex_bullet, '', line_string)
 
     # remove amount
-    regex_amount = r'([\d,]+ )+บาท( บาท)*'
+    regex_amount = r' ([\d,]+|-) บาท( บาท)*'
+    if double_amount:
+        regex_amount = r' ?([\d,]+|-)?' + regex_amount
     line_string = re.sub(regex_amount, '', line_string)
 
     regex_extrac_chars = '[\*\-\.:\(\)\s]+'
