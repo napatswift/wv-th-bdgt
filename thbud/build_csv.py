@@ -84,7 +84,6 @@ def extract_budget_item_name(line_string: str, double_amount: bool = False):
         regex_amount = r' ?([\d,]+|-)?' + regex_amount
     line_string = re.sub(regex_amount, '', line_string)
 
-    regex_extrac_chars = '[\*\-\.:\(\)\s]+'
-    line_string = re.sub('^'+regex_extrac_chars, '', line_string)
-    line_string = re.sub(regex_extrac_chars+'$', '', line_string)
+    line_string = re.sub('^[\*\-\.:\)\s]+', '', line_string)
+    line_string = re.sub('[\*\-\.:\(\s]$', '', line_string)
     return line_string.strip()
