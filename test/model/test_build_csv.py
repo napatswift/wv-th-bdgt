@@ -422,3 +422,136 @@ def test_build_csv_with_output():
     ]
 
     assert build_csv(root) == expected
+
+def test_build_csv_with_fiscal_years_budget_should_devide_amount_equely():
+    root = BudgetItem(
+        'MINISTRY',
+        'กระทรวงการคลัง',
+        0,
+        '2563.3.1',
+        0,
+        children=[
+            BudgetItem(
+                'BUDGETARY_UNIT',
+                'หน่วยรับงบ',
+                0,
+                '2563.3.1',
+                10,
+                children=[
+                    BudgetItem(
+                        'BUDGET_PLAN',
+                        'แผนงาน',
+                        0,
+                        '2563.3.1',
+                        11,
+                        children=[
+                            BudgetItem(
+                                'BUDGET_DETAIL',
+                                'รายการงบ 1',
+                                300,
+                                '2563.3.1',
+                                12,
+                                fiscal_year_budget=[
+                                    FiscalYearBudget(
+                                        'ปี 2563 50 บาท',
+                                        2563,
+                                        50,
+                                        year_end=2568,
+                                    ),
+                                ]
+                            ),
+                        ]
+                    )
+                ]
+            )
+        ]
+    )
+
+    expected = [
+        {
+            'REF_DOC': '2563.3.1',
+            'REF_PAGE_NO': 12,
+            'MINISTRY': 'กระทรวงการคลัง',
+            'BUDGETARY_UNIT': 'หน่วยรับงบ',
+            'CROSS_FUNC?': False,
+            'BUDGET_PLAN': 'แผนงาน',
+            'OUTPUT': '',
+            'PROJECT': '',
+            'ITEM_DESCRIPTION': 'รายการงบ 1',
+            'FISCAL_YEAR': 2563,
+            'AMOUNT': 10,
+            'OBLIGED?': True
+        },
+        {
+            'REF_DOC': '2563.3.1',
+            'REF_PAGE_NO': 12,
+            'MINISTRY': 'กระทรวงการคลัง',
+            'BUDGETARY_UNIT': 'หน่วยรับงบ',
+            'CROSS_FUNC?': False,
+            'BUDGET_PLAN': 'แผนงาน',
+            'OUTPUT': '',
+            'PROJECT': '',
+            'ITEM_DESCRIPTION': 'รายการงบ 1',
+            'FISCAL_YEAR': 2564,
+            'AMOUNT': 10,
+            'OBLIGED?': True
+        },
+        {
+            'REF_DOC': '2563.3.1',
+            'REF_PAGE_NO': 12,
+            'MINISTRY': 'กระทรวงการคลัง',
+            'BUDGETARY_UNIT': 'หน่วยรับงบ',
+            'CROSS_FUNC?': False,
+            'BUDGET_PLAN': 'แผนงาน',
+            'OUTPUT': '',
+            'PROJECT': '',
+            'ITEM_DESCRIPTION': 'รายการงบ 1',
+            'FISCAL_YEAR': 2565,
+            'AMOUNT': 10,
+            'OBLIGED?': True
+        },
+        {
+            'REF_DOC': '2563.3.1',
+            'REF_PAGE_NO': 12,
+            'MINISTRY': 'กระทรวงการคลัง',
+            'BUDGETARY_UNIT': 'หน่วยรับงบ',
+            'CROSS_FUNC?': False,
+            'BUDGET_PLAN': 'แผนงาน',
+            'OUTPUT': '',
+            'PROJECT': '',
+            'ITEM_DESCRIPTION': 'รายการงบ 1',
+            'FISCAL_YEAR': 2566,
+            'AMOUNT': 10,
+            'OBLIGED?': True
+        },
+        {
+            'REF_DOC': '2563.3.1',
+            'REF_PAGE_NO': 12,
+            'MINISTRY': 'กระทรวงการคลัง',
+            'BUDGETARY_UNIT': 'หน่วยรับงบ',
+            'CROSS_FUNC?': False,
+            'BUDGET_PLAN': 'แผนงาน',
+            'OUTPUT': '',
+            'PROJECT': '',
+            'ITEM_DESCRIPTION': 'รายการงบ 1',
+            'FISCAL_YEAR': 2567,
+            'AMOUNT': 10,
+            'OBLIGED?': True
+        },
+        {
+            'REF_DOC': '2563.3.1',
+            'REF_PAGE_NO': 12,
+            'MINISTRY': 'กระทรวงการคลัง',
+            'BUDGETARY_UNIT': 'หน่วยรับงบ',
+            'CROSS_FUNC?': False,
+            'BUDGET_PLAN': 'แผนงาน',
+            'OUTPUT': '',
+            'PROJECT': '',
+            'ITEM_DESCRIPTION': 'รายการงบ 1',
+            'FISCAL_YEAR': 2568,
+            'AMOUNT': 10,
+            'OBLIGED?': True
+        },
+    ]
+
+    assert build_csv(root) == expected
