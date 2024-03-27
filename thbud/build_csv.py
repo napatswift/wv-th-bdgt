@@ -80,6 +80,7 @@ def extract_budget_item_name(line_string: str, double_amount: bool = False):
         line_string = re.sub(regex_bullet, '', line_string)
 
     # remove amount
+    line_string = line_string.rsplit('$', 1)[0].strip()
     regex_amount = r' ([\d,]+|-) บาท( บาท)*'
     if double_amount:
         regex_amount = r' ?([\d,]+|-)?' + regex_amount
