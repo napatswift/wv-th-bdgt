@@ -129,7 +129,7 @@ class DocumentText:
     def _read_pdf_file(self,) -> List['PageText']:
         try:
             doc: fitz.Document = fitz.open(self.filepath)
-        except fitz.fitz.FileNotFoundError as e:
+        except fitz.FileNotFoundError as e:
             raise FileNotFoundError(
                 'File not found: {}'.format(self.filepath)) from e
 
