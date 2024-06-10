@@ -243,7 +243,25 @@ class XLSXDocumentText:
 
         if cell.data_type == 'n':
             return f'{cell.value:,}'
+        if cell.data_type == 's':
+            return cell.value
+
         return str(cell.value)
+
+    def _page_contains_table(self, ws) -> bool:
+        rows = ws.iter_rows()
+        cell_with_border_count = 0
+        cell_with_border_threshold = 3
+
+        def at_least_n_borders(cell, n):
+            return sum([1 for border in [cell.border.left, cell.border.right, cell.border.top, cell.border.bottom] if border.style]) >= n
+        for row in rows:
+            for cell in row:
+                if at_least_n_borders(cell, 2):
+                    cell_with_border_count += 1
+                    if cell_with_border_count >= cell_with_border_threshold:
+                        return True
+        return False
 
     def _read_xlsx_file(self) -> None:
         wb = openpyxl.load_workbook(self.filepath)
@@ -272,6 +290,8 @@ class XLSXDocumentText:
 
             for line in page.lines:
                 line.page = page
+            
+            page.contains_table = self._page_contains_table(ws)
 
             self.pages.append(page)
 
