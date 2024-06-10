@@ -1,4 +1,4 @@
-from typing import List, Optional, Callable, Tuple
+from typing import List, Optional, Callable, Tuple, Union
 import fitz
 from .text import WordText, PageText, LineText
 from ..tableparser import (
@@ -7,6 +7,8 @@ from ..tableparser import (
 from typing import List
 import cv2
 import numpy as np
+import openpyxl
+
 
 def group_text_by_line(text_list: List[WordText], threshold=0.01):
     """
@@ -85,19 +87,24 @@ def is_image_page(page: fitz.Page) -> bool:
     # then it's an image page.
     return image_size / page_size > theshold
 
+
 def is_rect_inside_page(rect, page_width, page_height):
     return rect.x0 >= 0 and rect.x1 <= page_width and rect.y0 >= 0 and rect.y1 <= page_height
 
+
 def page_contains_table(page: fitz.Page) -> bool:
     pix = page.get_pixmap()
-    image = np.frombuffer(pix.samples, dtype=np.uint8).reshape(pix.h, pix.w, pix.n)
+    image = np.frombuffer(pix.samples, dtype=np.uint8).reshape(
+        pix.h, pix.w, pix.n)
     return has_table(image)
+
 
 class DocumentText:
     def __init__(
         self,
         filepath: str,
-        words_loader: Optional[Callable[[fitz.Page], List[Tuple[float, float, float, float, str]]]] = None,
+        words_loader: Optional[Callable[[
+            fitz.Page], List[Tuple[float, float, float, float, str]]]] = None,
         lazy: bool = False,
     ) -> 'DocumentText':
         self.filepath = filepath
@@ -118,13 +125,13 @@ class DocumentText:
             words.append((x0, y0, x1, y1, text))
 
         return words
-        
 
     def _read_pdf_file(self,) -> List['PageText']:
         try:
             doc: fitz.Document = fitz.open(self.filepath)
         except fitz.fitz.FileNotFoundError as e:
-            raise FileNotFoundError('File not found: {}'.format(self.filepath)) from e
+            raise FileNotFoundError(
+                'File not found: {}'.format(self.filepath)) from e
 
         self.doc = doc
 
@@ -139,7 +146,7 @@ class DocumentText:
         for pidx, page in enumerate(self.doc.pages()):
             if pidx != page_index or self.pages[pidx] is not None:
                 continue
-            
+
             word_tuples = self.words_loader(page)
             page_width = page.rect.width
             page_height = page.rect.height
@@ -195,6 +202,98 @@ class DocumentText:
             if end is None:
                 raise IndexError(
                     'page {} not found in the doc {}'.format(repr(end), self.filepath))
+
+        if start < 0 or start >= len(self.pages):
+            raise IndexError('start must be in range [0, {})'.format(
+                len(self.pages)))
+
+        if end < 0 or end > len(self.pages):
+            raise IndexError('end must be in range [0, {})'.format(
+                len(self.pages)))
+
+        lines = []
+        for idx in range(start, end):
+            page = self.get_page(idx)
+            lines.extend(page.lines)
+
+        return lines
+
+
+class XLSXDocumentText:
+    def __init__(self, filepath: str) -> None:
+        self.filepath = filepath
+        self.pages = []
+        self.doc = None
+        self.sheet_name_to_index = dict()
+        self._read_xlsx_file()
+
+    def get_page(self, page_index: Union[int, str]) -> 'PageText':
+        if isinstance(page_index, str):
+            page_index = self.sheet_name_to_index.get(page_index)
+            if page_index is None:
+                raise IndexError(
+                    'sheet {} not found in the doc {}'.format(repr(page_index), self.filepath))
+        if page_index < 0 or page_index >= len(self.pages):
+            raise IndexError('page_index must be in range [0, {})'.format(
+                len(self.pages)))
+        return self.pages[page_index]
+    
+    def _get_cell_value(self, cell) -> str:
+        if not cell.value: return ''
+
+        if cell.data_type == 'n':
+            return f'{cell.value:,}'
+        return str(cell.value)
+
+    def _read_xlsx_file(self) -> None:
+        wb = openpyxl.load_workbook(self.filepath)
+        for sheet_index, sheet in enumerate(wb.sheetnames):
+            ws = wb[sheet]
+            lines: List['LineText'] = []
+            for row in ws.iter_rows():
+                words = []
+                row_cumulative_indent = 0
+                for cell in row:
+                    if cell.value:
+                        row_cumulative_indent += cell.alignment.indent
+                        words.append(WordText(
+                            x0=cell.column + row_cumulative_indent,
+                            y0=cell.row,
+                            x1=cell.column + 1 + row_cumulative_indent,
+                            y1=cell.row,
+                            text=self._get_cell_value(cell)
+                        ))
+
+                line = LineText(words, page_index=sheet_index,
+                                line_index=cell.row)
+                lines.append(line)
+            self.sheet_name_to_index[sheet] = sheet_index
+            page = PageText(lines, sheet_index, 1, 1, False, self)
+
+            for line in page.lines:
+                line.page = page
+
+            self.pages.append(page)
+
+    def get_lines_in_page(
+            self,
+            start: Optional[Union[int, str]] = None,
+            end: Optional[Union[int, str]] = None
+    ) -> List['LineText']:
+        if start is None:
+            start = 0
+        elif isinstance(start, str):
+            start = self.sheet_name_to_index.get(start)
+            if start is None:
+                raise IndexError(
+                    'sheet {} not found in the doc {}'.format(repr(start), self.filepath))
+        if end is None:
+            end = len(self.pages)
+        elif isinstance(end, str):
+            end = self.sheet_name_to_index.get(end)
+            if end is None:
+                raise IndexError(
+                    'sheet {} not found in the doc {}'.format(repr(end), self.filepath))
 
         if start < 0 or start >= len(self.pages):
             raise IndexError('start must be in range [0, {})'.format(

@@ -1,4 +1,4 @@
-from .documenttext import DocumentText
+from .documenttext import DocumentText, XLSXDocumentText
 from .text import PageText, LineText, WordText
 from .pdf_to_tree import (
     LineItem,
