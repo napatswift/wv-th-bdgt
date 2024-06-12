@@ -284,12 +284,20 @@ class XLSXDocumentText:
         wb = openpyxl.load_workbook(self.filepath)
         for sheet_index, sheet in enumerate(wb.sheetnames):
             ws = wb[sheet]
+            hidden_columns = {
+                column_index: v.hidden
+                for k, v in ws.column_dimensions.items()
+                for column_index in range(v.min, v.max + 1)
+            }
             lines: List['LineText'] = []
             for row in ws.iter_rows():
                 words = []
                 row_cumulative_indent = 0
                 for cell in row:
-                    if cell.value:
+                    if (
+                        cell.value
+                        and not hidden_columns[cell.col_idx]
+                    ):
                         row_cumulative_indent += cell.alignment.indent
                         words.append(WordText(
                             x0=cell.column + row_cumulative_indent,
