@@ -4,8 +4,6 @@ from .text import WordText, PageText, LineText
 from ..tableparser import (
     has_table
 )
-from typing import List
-import cv2
 import numpy as np
 import openpyxl
 
@@ -117,7 +115,10 @@ class DocumentText:
         self.words_loader = words_loader
         self._read_pdf_file()
 
-    def defualt_words_loader(self, page: fitz.Page) -> List[Tuple[float, float, float, float, str]]:
+    def defualt_words_loader(
+            self,
+            page: fitz.Page
+    ) -> List[Tuple[float, float, float, float, str]]:
         word_tuples = page.get_text_words()
         words = []
         for word in word_tuples:
@@ -187,7 +188,11 @@ class DocumentText:
             self._load_page(page_index)
         return self.pages[page_index]
 
-    def get_lines_in_page(self: 'DocumentText', start: Optional[int] = None, end: Optional[int] = None) -> List['LineText']:
+    def get_lines_in_page(
+            self: 'DocumentText',
+            start: Optional[int] = None,
+            end: Optional[int] = None
+    ) -> List['LineText']:
         if start is None:
             start = 0
         elif isinstance(start, str):
@@ -232,14 +237,18 @@ class XLSXDocumentText:
             page_index = self.sheet_name_to_index.get(page_index)
             if page_index is None:
                 raise IndexError(
-                    'sheet {} not found in the doc {}'.format(repr(page_index), self.filepath))
+                    'sheet {} not found in the doc {}'.format(
+                        repr(page_index), self.filepath
+                    )
+                )
         if page_index < 0 or page_index >= len(self.pages):
             raise IndexError('page_index must be in range [0, {})'.format(
                 len(self.pages)))
         return self.pages[page_index]
-    
+
     def _get_cell_value(self, cell) -> str:
-        if not cell.value: return ''
+        if not cell.value:
+            return ''
 
         if cell.data_type == 'n':
             return f'{cell.value:,}'
@@ -254,7 +263,15 @@ class XLSXDocumentText:
         cell_with_border_threshold = 3
 
         def at_least_n_borders(cell, n):
-            return sum([1 for border in [cell.border.left, cell.border.right, cell.border.top, cell.border.bottom] if border.style]) >= n
+            return sum([
+                1 for border in [
+                    cell.border.left,
+                    cell.border.right,
+                    cell.border.top,
+                    cell.border.bottom
+                ] if border.style
+            ]) >= n
+
         for row in rows:
             for cell in row:
                 if at_least_n_borders(cell, 2):
@@ -306,14 +323,20 @@ class XLSXDocumentText:
             start = self.sheet_name_to_index.get(start)
             if start is None:
                 raise IndexError(
-                    'sheet {} not found in the doc {}'.format(repr(start), self.filepath))
+                    'sheet {} not found in the doc {}'.format(
+                        repr(start), self.filepath
+                    )
+                )
         if end is None:
             end = len(self.pages)
         elif isinstance(end, str):
             end = self.sheet_name_to_index.get(end)
             if end is None:
                 raise IndexError(
-                    'sheet {} not found in the doc {}'.format(repr(end), self.filepath))
+                    'sheet {} not found in the doc {}'.format(
+                        repr(end), self.filepath
+                    )
+                )
 
         if start < 0 or start >= len(self.pages):
             raise IndexError('start must be in range [0, {})'.format(
