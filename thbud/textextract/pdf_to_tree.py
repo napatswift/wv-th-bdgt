@@ -108,6 +108,19 @@ def get_patern_of_bullet(String):
     return '', 0
 
 
+def is_quantity_string(stringToCheck):
+    stringToCheck = stringToCheck.replace(',', '')
+    stringToCheck = stringToCheck.strip()
+
+    return (
+        re.match(r'รวม \d+ รายการ', stringToCheck)
+        or re.match(r'\(\d+ หน่วย\)', stringToCheck)
+        # จำนวน 10 โครงการ
+        or re.match(r'จำนวน \d+ โครงการ', stringToCheck)
+
+    )
+
+
 def is_classifier(string):
     return string in ['แห่ง', 'สายทาง']
 
@@ -149,21 +162,17 @@ def get_entries(lines: List[LineText]):
     bullet_flag = False
     # project and output flag
     proj_outp_flag = False
-    # budget place holder
-    budget_plan = ''
 
     entry = []
     entries = []
     for i, line in enumerate(lines):
         line_id = line
-        # #skip page number
-        # if i[1] == 1: continue
 
         # joint line together
-        line_text = str(line)
+        line_text_string = str(line)
 
         # then split by whitespace
-        line_text = line_text.split()
+        line_text = line_text_string.split()
 
         # skiping
         if is_redundant_line(line_text):
@@ -171,40 +180,59 @@ def get_entries(lines: List[LineText]):
 
         # budget plan
         if line.page.contains_table:
-            if re.match(r'7.\d+$', line_text[0]) or (len(line_text) > 1 and line_text[1].startswith('แผนงาน')):
+            if re.match(r'7.\d+$', line_text[0]) or (
+                len(line_text) > 1 and line_text[1].startswith('แผนงาน')
+            ):
                 entries.append(('budget_plan', [line_id]))
             continue
 
         patern_of_bullet = get_patern_of_bullet(line_text[0])
-        if (re.match(r'ป?ี \d{4} ', ' '.join(line_text))
+
+        if (
+            re.match(r'ป?ี \d{4} ', line_text_string)
                 or 'ตั้งงบประมาณ' in line_text
+                or 'ตั้งงปบระมาณ' in line_text
                 or '�ั้งงบ�ร�มา�' in line_text
                 or '��กพันงบ�ร�มา�' in line_text
                 or 'ผูกพันงบประมาณ' in line_text
-            ):
+        ):
             entries.append(('fiscal_year', [line_id]))
 
             # DEBUG
             logger.debug('get_entries::`{}` is fiscal year'.format(line))
             continue
 
-        if patern_of_bullet[1] and (len(line_text) > 1 and not is_classifier(line_text[1])):
+        if is_quantity_string(line_text_string):
+            # 'รวม 117 รายการ (รวม 527 หน่วย)'
+            prev_entry = entries[-1]
+            prev_entry[1].append(line_id)
+            continue
+
+        if (
+            patern_of_bullet[1]
+                and (
+                    len(line_text) > 1
+                    and not is_classifier(line_text[1])
+                )
+        ):
             bullet_flag = True
 
             # DEBUG
             logger.debug('get_entries::`{}` is bullet'.format(line))
 
-        if (check_proj_outp('ผลผลิต', line_text) or
-            check_proj_outp('ผลผลิ�', line_text) or
-            check_proj_outp('�ล�ลิ�', line_text) or
-            check_proj_outp('�ล�ลิต', line_text)
-            ):
+        if (
+            check_proj_outp('ผลผลิต', line_text)
+                or check_proj_outp('ผลผลิ�', line_text)
+                or check_proj_outp('�ล�ลิ�', line_text)
+                or check_proj_outp('�ล�ลิต', line_text)
+        ):
             proj_outp_flag = 'OUTPUT'
 
-        if (check_proj_outp('โครงการ', line_text) or
-            check_proj_outp('�ครงการ', line_text) or
-            check_proj_outp('��รงการ', line_text)
-            ):
+        if (
+            check_proj_outp('โครงการ', line_text)
+            or check_proj_outp('�ครงการ', line_text)
+            or check_proj_outp('��รงการ', line_text)
+        ):
             proj_outp_flag = 'PROJECT'
 
         if proj_outp_flag:
@@ -221,14 +249,19 @@ def get_entries(lines: List[LineText]):
                 proj_outp_flag = False
                 entry = []
         else:
-            if ('เงินนอกงบประมาณ' in line_text
-                or 'เงินน�กงบประมาณ' in line_text
-                or 'เงินงบประมาณ' in line_text
-                ):
+            if (
+                'เงินนอกงบประมาณ' in line_text
+                    or 'เงินน�กงบประมาณ' in line_text
+                    or 'เงินงบประมาณ' in line_text
+            ):
                 continue
 
-            logger.warning(
-                f'SKIPPED page {line.page.page_index}, line {line.line_index} 👉🏽 {line_text}')
+            logger.warning((
+                f'SKIPPED page {line.page.page_index},'
+                f' line {line.line_index} '
+                f'👉🏽 {line_text_string}'
+            ))
+
     return [
         LineItem(t, lines) for t, lines in entries
     ]
@@ -248,40 +281,51 @@ def add_level_to_entries_positions(entries: List[LineItem],):
         logger.debug(f'extract_tree_levels::{(bud_item)}')
 
         if bud_item.itemtype != 'item':
-            # If the budget unit is not an item, then it is a budget unit header.
-            # In this case, we clear the stack and add a new level to the levels list.
+            # If the budget unit is not an item,
+            # then it is a budget unit header.
+            # In this case, we clear the stack
+            # and add a new level to the levels list.
             if bud_item.itemtype in ['budget_plan', 'PROJECT', 'OUTPUT']:
                 stack_x = []
 
             if bud_item.itemtype == 'budget_plan':
                 bud_item.set_level(-2)
-            elif bud_item.itemtype == 'PROJECT' or bud_item.itemtype == 'OUTPUT':
+            elif (
+                bud_item.itemtype == 'PROJECT'
+                or bud_item.itemtype == 'OUTPUT'
+            ):
                 bud_item.set_level(-1)
 
             continue
 
-        # pex is the x position of the end of the page that the budget unit is on.
+        # pex is the x position of the end of the page
+        # that the budget unit is on.
         pex = page_end_x_sr[bud_item.page_index]
 
         # LOGGING
         logger.debug(
             'extract_tree_levels::page x1 max: {}'.format(page_x1_max))
 
-        # lsx is the x position of the start of the first line of the budget unit.
+        # lsx is the x start position of the first line of the budget unit.
         lsx = bud_item.x0 + (page_x1_max - pex)
 
         # LOGGING
         logger.debug(
-            'extract_tree_levels::line x0: bud_item.x0={} + (page_x1_max={} - pex={}) = {}'
+            ('extract_tree_levels::line x0: '
+             'bud_item.x0={} + (page_x1_max={} - pex={}) = {}')
             .format(bud_item.x0, page_x1_max, pex, lsx))
 
-        # If the previous item has an x position that is more than the threshold greater than this item's x position,
+        # If the previous item has an x position that is more than
+        # the threshold greater than this item's x position,
         # then we pop the previous item off the stack.
         while len(stack_x) and stack_x[-1] > lsx + x_diff_threshold:
             stack_x.pop()
 
-        # If the stack is empty or the difference between the x positions of the current item and the item at the top of the stack
-        # is greater than the threshold, then we push the current item's x position onto the stack.
+        # If the stack is empty or the difference between
+        # the x positions of the current item
+        # and the item at the top of the stack
+        # is greater than the threshold,
+        # then we push the current item's x position onto the stack.
         if len(stack_x) == 0 or abs(stack_x[-1] - lsx) >= x_diff_threshold:
             stack_x.append(lsx)
 
@@ -296,8 +340,9 @@ def extract_tree_levels(
     bud_items: List[LineItem],
 ) -> BudgetItem:
     """
-    Extracts the levels of the budget units.
-    The levels are extracted by looking at the x0 positions of the budget units.
+    Extracts the levels of the budget items.
+    The levels are extracted by looking at
+    the x0 positions of the budget items.
     """
 
     add_level_to_entries_positions(bud_items)
@@ -336,7 +381,10 @@ def extract_tree_levels(
             )
             continue
 
-        while len(parent_stack) > 0 and parent_stack[-1]['level'] >= bud_item.level:
+        while (
+            len(parent_stack) > 0
+            and parent_stack[-1]['level'] >= bud_item.level
+        ):
             parent_stack.pop()
 
         if len(parent_stack) == 0:
