@@ -204,9 +204,10 @@ def get_entries(lines: List[LineText]):
 
         if is_quantity_string(line_text_string):
             # 'รวม 117 รายการ (รวม 527 หน่วย)'
-            prev_entry = entries[-1]
-            prev_entry[1].append(line_id)
-            continue
+            if not bullet_flag:
+                prev_entry = entries[-1]
+                prev_entry[1].append(line_id)
+                continue
 
         if (
             patern_of_bullet[1]
@@ -373,7 +374,7 @@ def extract_tree_levels(
             year_start, year_end = get_year_from_string(str(bud_item))
             last_node.fiscal_year_budget.append(
                 FiscalYearBudget(
-                    line=str(bud_item),
+                    line=str(bud_item).replace('\n', '\t').strip(),
                     year=year_start,
                     amount=get_amount_from_string(str(bud_item)),
                     year_end=year_end,
@@ -395,7 +396,7 @@ def extract_tree_levels(
 
         node = BudgetItem(
             budget_type=itemtype_mapper[bud_item.itemtype],
-            name=str(bud_item),
+            name=str(bud_item).replace('\n', '\t').strip(),
             amount=get_amount_from_string(str(bud_item)),
             document=bud_item.document,
             page=bud_item.page_index,
