@@ -243,7 +243,7 @@ def get_entries(lines: List[LineText]):
 
         if bullet_flag or proj_outp_flag:
             entry.append(line_id)
-            if line_text[-1].replace('-', '') == 'บาท':
+            if line_text[-1].replace('-', '').replace('*', '') == 'บาท':
                 entries.append(
                     ('item' if bullet_flag else proj_outp_flag, entry))
                 bullet_flag = False
