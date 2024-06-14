@@ -210,7 +210,7 @@ def get_entries(lines: List[LineText]):
                 continue
 
         if (
-            patern_of_bullet[1]
+            (patern_of_bullet[1] or line_text[0].startswith('กิจกรรม'))
                 and (
                     len(line_text) > 1
                     and not is_classifier(line_text[1])
