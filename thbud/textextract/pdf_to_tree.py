@@ -4,6 +4,7 @@ from ..textextract import DocumentText, PageText, LineText
 from ..model import BudgetItem, FiscalYearBudget
 import re
 import logging
+import difflib
 
 logger = logging.getLogger(__name__)
 
@@ -157,7 +158,10 @@ def check_proj_outp(target, line_text):
     return False
 
 
-def get_entries(lines: List[LineText]):
+def get_entries(
+        lines: List[LineText],
+        budget_plan_on_table_page_only=True
+):
     # flags
     bullet_flag = False
     # project and output flag
@@ -165,6 +169,9 @@ def get_entries(lines: List[LineText]):
 
     entry = []
     entries = []
+    budget_item_start_string = 'รายละเอียดงบประมาณจำแนกตามงบรายจ่าย'
+    budget_item_started = False
+
     for i, line in enumerate(lines):
         line_id = line
 
@@ -174,16 +181,32 @@ def get_entries(lines: List[LineText]):
         # then split by whitespace
         line_text = line_text_string.split()
 
-        # skiping
-        if is_redundant_line(line_text):
+        if not line_text:
             continue
 
+        # skiping
+        # if is_redundant_line(line_text):
+        #     continue
+
         # budget plan
-        if line.page.contains_table:
+        if not budget_plan_on_table_page_only or line.page.contains_table:
             if re.match(r'7.\d+$', line_text[0]) or (
                 len(line_text) > 1 and line_text[1].startswith('แผนงาน')
             ):
                 entries.append(('budget_plan', [line_id]))
+
+            if budget_plan_on_table_page_only:
+                continue
+
+        sim_ratio = difflib.SequenceMatcher(
+                None, line_text_string, budget_item_start_string
+        ).ratio()
+
+        if (sim_ratio > 0.9):
+            budget_item_started = True
+            continue
+
+        if not budget_item_started:
             continue
 
         patern_of_bullet = get_patern_of_bullet(line_text[0])
@@ -256,6 +279,9 @@ def get_entries(lines: List[LineText]):
                     or 'เงินงบประมาณ' in line_text
             ):
                 continue
+
+            if 'กิจกรรม' in line_text:
+                pass
 
             logger.warning((
                 f'SKIPPED page {line.page.page_index},'
