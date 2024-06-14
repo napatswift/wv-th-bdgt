@@ -296,7 +296,7 @@ class XLSXDocumentText:
                 for cell in row:
                     if (
                         cell.value
-                        and not hidden_columns[cell.col_idx]
+                        and not hidden_columns.get(cell.col_idx, False)
                     ):
                         row_cumulative_indent += cell.alignment.indent
                         words.append(WordText(
