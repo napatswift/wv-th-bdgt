@@ -153,7 +153,7 @@ def is_redundant_line(line_text: List[str]):
 def check_proj_outp(target, line_text):
     if line_text[0].replace(':', '') == target:
         return True
-    if len(line_text) > 1 and line_text[1].startswith(target):
+    if len(line_text) > 1 and line_text[1] == target:
         return True
     return False
 
@@ -202,9 +202,12 @@ def get_entries(
                 None, line_text_string, budget_item_start_string
         ).ratio()
 
-        if (sim_ratio > 0.9):
+        if (
+            sim_ratio > 0.9
+                or check_proj_outp('ผลผลิต', line_text)
+                or check_proj_outp('โครงการ', line_text)
+        ):
             budget_item_started = True
-            continue
 
         if not budget_item_started:
             continue
