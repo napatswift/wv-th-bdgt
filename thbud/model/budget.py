@@ -1,10 +1,14 @@
 from enum import Enum
 from typing import List, Optional
 from anytree import NodeMixin
+import math
 
 
 class BudgetType(Enum):
     ROOT = 'ROOT'
+    STRATEGY = 'STRATEGY'
+    MOTHER_PLAN = 'MOTHER_PLAN'
+    CHILD_PLAN = 'CHILD_PLAN'
     # กระทรวง/หน่วยงานเทียบเท่ากระทรวง
     MINISTRY = 'MINISTRY'
     # หน่วยรับงบประมาณ
@@ -18,11 +22,13 @@ class BudgetType(Enum):
     # รายการงบ
     BUDGET_DETAIL = 'BUDGET_DETAIL'
 
+
 def get_level_from_columns(columns):
     for column in columns:
         if column.startswith('name_'):
             return int(column.split('_')[1])
     raise ValueError(f'Cannot find level in {columns}')
+
 
 class BudgetItem(NodeMixin):
     def __init__(
@@ -42,22 +48,25 @@ class BudgetItem(NodeMixin):
         elif isinstance(budget_type, str):
             self.budget_type = BudgetType(budget_type)
         else:
-            raise ValueError(f'budget_type must be BudgetType or str, got {type(budget_type)}')
+            raise ValueError(
+                f'budget_type must be BudgetType or str, got {type(budget_type)}')
         if not isinstance(name, str):
             raise ValueError(f'name must be str, got {type(name)}')
-        
+
         if amount is not None and not isinstance(amount, (int, float)):
-            raise ValueError(f'amount must be int or float, got {type(amount)}')
-        
+            raise ValueError(
+                f'amount must be int or float, got {type(amount)}')
+
         if not isinstance(document, str):
             raise ValueError(f'document must be str, got {type(document)}')
-        
+
         if not isinstance(page, int):
             raise ValueError(f'page must be int, got {type(page)}')
-        
+
         if not isinstance(fiscal_year_budget, list) and fiscal_year_budget is not None:
-            raise ValueError(f'fiscal_year_budget must be list, got {type(fiscal_year_budget)}')
-        
+            raise ValueError(
+                f'fiscal_year_budget must be list, got {type(fiscal_year_budget)}')
+
         self.name = name
         self.amount = amount
         self.document = document
@@ -71,36 +80,39 @@ class BudgetItem(NodeMixin):
 
         if children:
             self.children = children
-    
+
     def _check_sum(self):
         if self.amount is None:
             if any([
                 child.amount is not None
                 for child in self.children
             ]):
-                raise ValueError(f'amount of {self.name} is None but some of children is not None')
-            
+                raise ValueError(
+                    f'amount of {self.name} is None but some of children is not None')
+
             return
         if self.children:
             if any([
                 child.amount is None
                 for child in self.children
             ]):
-                raise ValueError(f'amount of {self.name} is {self.amount} but some of children is None')
-            
+                raise ValueError(
+                    f'amount of {self.name} is {self.amount} but some of children is None')
+
             sum_amount = sum([
                 child.amount
                 for child in self.children
             ])
-            if self.amount != sum_amount:
-                raise ValueError(f'amount of {self.name} is {self.amount} but sum of children is {sum_amount}')
+            if not math.isclose(self.amount, sum_amount,):
+                raise ValueError(
+                    f'amount of {self.name} is {self.amount} but sum of children is {sum_amount}')
 
     def __str__(self):
         return self.name
 
     def __repr__(self):
         return f'BudgetItem({self.budget_type.name}, {self.name}, {self.amount})'
-    
+
     @classmethod
     def from_json(cls, json_obj):
         return cls(
@@ -118,12 +130,12 @@ class BudgetItem(NodeMixin):
                 for child in json_obj.get('children', list())
             ]
         )
-    
+
     @classmethod
     def build_tree_by_rows(cls, rows) -> 'BudgetItem':
         if len(rows) == 0:
             return None
-        
+
         ancestry_stack = [
             {
                 'node': cls(
@@ -143,9 +155,11 @@ class BudgetItem(NodeMixin):
 
                 curr_level = get_level_from_columns(row.keys())
                 if 'fiscal_year' not in row.keys():
-                    raise ValueError('row {} does not contain fiscal_year'.format(row))
+                    raise ValueError(
+                        'row {} does not contain fiscal_year'.format(row))
                 if 'fiscal_year_end' not in row.keys():
-                    raise ValueError('row {} does not contain fiscal_year_end'.format(row))
+                    raise ValueError(
+                        'row {} does not contain fiscal_year_end'.format(row))
 
                 ancestry_stack[-1]['node'].fiscal_year_budget.append(
                     FiscalYearBudget(
@@ -153,7 +167,7 @@ class BudgetItem(NodeMixin):
                         year=row['fiscal_year'],
                         year_end=row['fiscal_year_end'],
                         amount=row['amount'],
-                        ))
+                    ))
                 continue
 
             curr_level = get_level_from_columns(row.keys())
@@ -176,7 +190,8 @@ class BudgetItem(NodeMixin):
                     parent=parent,
                 )
             except ValueError as e:
-                raise ValueError(f'Error while creating node from row {row}') from e
+                raise ValueError(
+                    f'Error while creating node from row {row}') from e
 
             ancestry_stack.append({
                 'node': node,
@@ -186,12 +201,12 @@ class BudgetItem(NodeMixin):
         root = ancestry_stack[0]['node']
         if root.budget_type.name != 'ROOT':
             raise ValueError('First row must be ROOT')
-        
+
         if len(root.children) == 1:
-            return root.children[0] # if there is only one child, return it
-        
+            return root.children[0]  # if there is only one child, return it
+
         return root
-    
+
     def to_json(self):
         return {
             'budget_type': self.budget_type.name,
@@ -208,7 +223,7 @@ class BudgetItem(NodeMixin):
                 for child in self.children
             ]
         }
-    
+
     def _get_error_message(self):
         error_message = ''
 
@@ -218,10 +233,10 @@ class BudgetItem(NodeMixin):
             error_message += f'While checking sum: {e}\n'
 
         return error_message
-    
+
     def to_rows(self, depth=1):
         rows = [{
-            'error_message': self._get_error_message(),
+            'error_message': self._get_error_message().strip(),
             'budget_type': self.budget_type.name,
             f'name_{depth}': self.name,
             'amount': self.amount,
@@ -236,6 +251,7 @@ class BudgetItem(NodeMixin):
             rows.extend(child.to_rows(depth=depth+1))
 
         return rows
+
 
 class FiscalYearBudget:
     """
@@ -257,10 +273,10 @@ class FiscalYearBudget:
 
     def __str__(self):
         return f'{self.year} - {self.year_end}' if self.year != self.year_end else f'{self.year}'
-    
+
     def __repr__(self):
         return f'FiscalYearBudget({self.year}, {self.year_end}, {self.amount})'
-    
+
     @classmethod
     def from_json(cls, json_obj):
         return cls(
@@ -269,7 +285,7 @@ class FiscalYearBudget:
             year_end=json_obj.get('year_end'),
             amount=json_obj['amount'],
         )
-    
+
     def to_json(self):
         return {
             'line': self.line,
@@ -277,7 +293,7 @@ class FiscalYearBudget:
             'year_end': self.year_end,
             'amount': self.amount,
         }
-    
+
     def to_row(self, depth=1):
         return {
             'error_message': '',
@@ -287,4 +303,3 @@ class FiscalYearBudget:
             'fiscal_year_end': self.year_end,
             'amount': self.amount,
         }
-    

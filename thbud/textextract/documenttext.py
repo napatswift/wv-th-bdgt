@@ -259,25 +259,31 @@ class XLSXDocumentText:
 
     def _page_contains_table(self, ws) -> bool:
         rows = ws.iter_rows()
-        cell_with_border_count = 0
-        cell_with_border_threshold = 3
+        cell_with_border_threshold = 2
 
-        def at_least_n_borders(cell, n):
-            return sum([
-                1 for border in [
-                    cell.border.left,
-                    cell.border.right,
-                    cell.border.top,
-                    cell.border.bottom
-                ] if border.style
-            ]) >= n
-
+        count_each_side = {
+            'left': 0,
+            'right': 0,
+            'top': 0,
+            'bottom': 0
+        }
         for row in rows:
             for cell in row:
-                if at_least_n_borders(cell, 2):
-                    cell_with_border_count += 1
-                    if cell_with_border_count >= cell_with_border_threshold:
-                        return True
+                if cell.border.left.style:
+                    count_each_side['left'] += 1
+                if cell.border.right.style:
+                    count_each_side['right'] += 1
+                if cell.border.top.style:
+                    count_each_side['top'] += 1
+                if cell.border.bottom.style:
+                    count_each_side['bottom'] += 1
+
+                if all(
+                    c >= cell_with_border_threshold
+                    for c in count_each_side.values()
+                ):
+                    return True
+
         return False
 
     def _read_xlsx_file(self) -> None:
@@ -289,6 +295,7 @@ class XLSXDocumentText:
                 for k, v in ws.column_dimensions.items()
                 for column_index in range(v.min, v.max + 1)
             }
+
             lines: List['LineText'] = []
             for row in ws.iter_rows():
                 words = []
@@ -315,7 +322,7 @@ class XLSXDocumentText:
 
             for line in page.lines:
                 line.page = page
-            
+
             page.contains_table = self._page_contains_table(ws)
 
             self.pages.append(page)

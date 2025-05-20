@@ -2,6 +2,7 @@ from .model import BudgetItem, BudgetType
 from anytree import PreOrderIter
 import re
 
+
 def build_csv(root: BudgetItem):
     """
     Build a list of dictionaries from a BudgetItem tree. Only leaf nodes are
@@ -56,23 +57,27 @@ def build_csv(root: BudgetItem):
                     for year in range(fy_node.year, fy_node.year_end+1):
                         copy_row = row.copy()
                         copy_row['FISCAL_YEAR'] = year
-                        copy_row['AMOUNT'] = fy_node.amount / max(1, total_year)
+                        copy_row['AMOUNT'] = (
+                            fy_node.amount / max(1, total_year))
                         result.append(copy_row)
             else:
                 result.append(row)
 
     return result
 
+
 def extract_budget_item_name(line_string: str, double_amount: bool = False):
     if line_string.startswith('ผลผลิต :'):
         line_string = line_string[9:]
 
-    line_string = re.sub(r'([0-9\.]+\s+)?ผลผลิต(ที่)?\s+(\d+\s+)?:', '', line_string)
+    line_string = re.sub(
+        r'([0-9\.]+\s+)?ผลผลิต(ที่)?\s+(\d+\s+)?:', '', line_string)
 
     if line_string.startswith('โครงการ :'):
         line_string = line_string[9:]
 
-    line_string = re.sub(r'([0-9\.]+\s+)?โครงการ(ที่)?\s+(\d+\s+)?:', '', line_string)
+    line_string = re.sub(
+        r'([0-9\.]+\s+)?โครงการ(ที่)?\s+(\d+\s+)?:', '', line_string)
 
     # remove bullet
     regex_bullet = r'^[\d\s\(\)\. ]+'
@@ -80,6 +85,7 @@ def extract_budget_item_name(line_string: str, double_amount: bool = False):
         line_string = re.sub(regex_bullet, '', line_string)
 
     # remove amount
+    line_string = line_string.rsplit('|$|', 1)[0].strip()
     line_string = line_string.rsplit('$', 1)[0].strip()
     regex_amount = r' ([\d,]+|-) บาท( บาท)*'
     if double_amount:
