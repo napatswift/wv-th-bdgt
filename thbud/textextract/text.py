@@ -1,9 +1,7 @@
 import re
 from typing import List, Dict, Union
 from . import documenttext
-import logging
-
-logger = logging.getLogger(__name__)
+from loguru import logger
 
 
 def mean(numbers: List[float]) -> float:

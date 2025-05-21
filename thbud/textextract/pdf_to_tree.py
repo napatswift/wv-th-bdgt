@@ -3,9 +3,7 @@ from typing import List, Tuple
 from ..textextract import DocumentText, PageText, LineText
 from ..model import BudgetItem, FiscalYearBudget
 import re
-import logging
-
-logger = logging.getLogger(__name__)
+from loguru import logger
 
 """
 class LineWrapper:

@@ -6,3 +6,4 @@ anytree
 pandas
 openpyxl
 opencv-python
+loguru
