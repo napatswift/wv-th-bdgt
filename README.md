@@ -22,8 +22,9 @@ This section guides you through setting up and running the project locally and l
 
 ### Prerequisites
 
-*   Python 3.8+
+*   Python 3.10+
 *   Git
+*   [UV](https://docs.astral.sh/uv/) (recommended) or pip
 *   (For Google Colab / GDrive integration): A Google Account with access to Google Drive and the ability to authenticate `gspread`.
 
 ### Local Setup
@@ -34,12 +35,15 @@ This section guides you through setting up and running the project locally and l
     cd wv-th-bdgt
     git checkout 2567
     ```
-2.  **Install dependencies:**
-    It is highly recommended to use a virtual environment.
+2.  **Install dependencies using UV (recommended):**
+    ```bash
+    uv sync
+    ```
+    Or using pip:
     ```bash
     python -m venv venv
     source venv/bin/activate  # On Windows: venv\Scripts\activate
-    pip install -r requirements.txt
+    pip install -e .
     ```
 3.  **Google Cloud Authentication (for Colab/GSpread):**
     The Colab notebooks (`1-sheet-checker.ipynb`, `1-build-final-budget-items.ipynb`) rely on `google.colab.auth` and `gspread` for Google Drive and Google Sheets API access. When running these notebooks in Colab, you will be prompted to authenticate your Google account. Ensure this account has read/write access to the target Google Spreadsheets.
@@ -55,9 +59,52 @@ The Colab notebooks require specific Google Spreadsheet keys and the target fisc
 
 ## Usage
 
-The project workflow consists of two main stages: local automated extraction from XLSX files and collaborative validation/finalization using Google Colab.
+The project workflow consists of three main stages: local automated extraction from PDF or XLSX files, and collaborative validation/finalization using Google Colab.
 
-### 1. Automated Extraction from XLSX (`convertxlsx.py`)
+### 1. Automated Extraction from PDF (`extract_budget_units.py` + `run_budget_extraction.py`)
+
+This workflow processes the "White-Red Book" (เล่มขาว-แดง) PDF budget documents directly.
+
+#### Step 1: Extract Budget Units Index
+
+First, extract the Table of Contents (TOC) from PDFs to create an index of all budget units with their page ranges:
+
+```bash
+uv run python extract_budget_units.py pdfs budget_units.csv
+```
+
+This scans PDFs in the `pdfs/` directory and generates `budget_units.csv` with columns:
+- `ministry` - Ministry name (กระทรวง)
+- `budget_unit` - Budget unit name (หน่วยรับงบประมาณ)
+- `start` - Start page number
+- `end` - End page number
+- `doc` - Source PDF filename
+
+#### Step 2: Extract Budget Details
+
+Run the budget extraction to parse budget items from each unit's page range:
+
+```bash
+uv run python run_budget_extraction.py budget_units.csv pdfs output
+```
+
+This generates for each ministry:
+- `output/{ministry}.csv` - Tabular format with `name_1`, `name_2`, etc. columns (for sheet checker)
+- `output/{ministry}.json` - Tree structure for programmatic access
+
+**Output CSV columns:**
+| Column | Description |
+|--------|-------------|
+| `error_message` | Validation errors (e.g., sum mismatches) |
+| `budget_type` | MINISTRY, BUDGETARY_UNIT, BUDGET_PLAN, PROJECT, OUTPUT, BUDGET_DETAIL |
+| `name_1` to `name_11` | Hierarchical item names |
+| `amount` | Budget amount in Baht |
+| `document` | Source PDF path |
+| `page` | Page number |
+| `fiscal_year` | Start year for multi-year budgets |
+| `fiscal_year_end` | End year for multi-year budgets |
+
+### 2. Automated Extraction from XLSX (`convertxlsx.py`)
 
 This script processes raw XLSX budget documents, extracts their hierarchical structure, and generates initial CSV and JSON outputs for each ministry.
 
@@ -90,7 +137,7 @@ This script processes raw XLSX budget documents, extracts their hierarchical str
     *   `ThreadPoolExecutor`: Enables parallel processing of ministries for efficiency.
     *   **Output Schema:** CSV output flattens the hierarchy using `name_1` to `name_N` columns, while JSON maintains the nested structure.
 
-### 2. Collaborative Validation and Finalization (Google Colab)
+### 3. Collaborative Validation and Finalization (Google Colab)
 
 This stage involves uploading the locally generated CSVs to Google Sheets for validation and then using Colab notebooks to apply checks and produce the final, clean dataset.
 

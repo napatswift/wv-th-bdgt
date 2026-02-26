@@ -1,0 +1,33 @@
+[project]
+name = "thbud"
+version = "0.1.0"
+description = "Thailand Budget PDF parser and extractor"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "pymupdf",
+    "pillow",
+    "anytree",
+    "pandas",
+    "openpyxl",
+    "opencv-python",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest",
+    "mock",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[dependency-groups]
+dev = [
+    "pytest",
+    "mock",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["test"]
