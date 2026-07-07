@@ -415,7 +415,7 @@ def extract_tree_levels(
                 FiscalYearBudget(
                     line=str(bud_item).replace('\n', '\t').strip(),
                     year=year_start,
-                    amount=get_amount_from_string(str(bud_item)),
+                    amount=get_amount_from_lines(bud_item.lines),
                     year_end=year_end,
                 )
             )

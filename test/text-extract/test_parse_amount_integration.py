@@ -33,3 +33,17 @@ def test_parse_uses_column_total_not_embedded_per_unit():
     root = extract_tree_levels(get_entries(page.lines))
     node = _find(root, "เตาอบไฟฟ้าเมล็ดโกโก้")
     assert node.amount == 143000.0
+
+
+def test_fiscal_year_amount_from_column_not_embedded():
+    # A forward-commitment line ('ปี YYYY ตั้งงบประมาณ N บาท') keeps its total in the
+    # same numeric column. If the text cell embeds another '<num> บาท', the commitment
+    # amount must still be the column total, not the embedded figure.
+    page = make_page([
+        ["1) ค่าเช่าที่ราชพัสดุ 30,000 บาท", "30,000", "บาท"],
+        ["ปี 2569 ตั้งงบประมาณ (อัตรา 20 บาท ต่อหน่วย)", "83,137,500", "บาท"],
+    ])
+    root = extract_tree_levels(get_entries(page.lines))
+    node = _find(root, "ค่าเช่าที่ราชพัสดุ")
+    assert len(node.fiscal_year_budget) == 1
+    assert node.fiscal_year_budget[0].amount == 83137500.0
