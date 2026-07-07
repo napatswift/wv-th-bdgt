@@ -113,6 +113,26 @@ def get_amount_from_lines(lines) -> float:
     return get_amount_from_string(' '.join(str(line) for line in lines))
 
 
+def _line_bears_total_column(line: 'LineText') -> bool:
+    """True when a row carries its total column, so its budget item is complete.
+
+    Two signals, unioned so this stays a strict superset of the legacy check:
+      * the legacy check — the last whitespace token is the 'บาท' marker; keeps
+        rows that flatten the total into one 'N บาท' cell closing as before, and
+      * a standalone 'บาท'-marker *word* anywhere in the row — closes rows whose
+        total cell is followed by a trailing extra column ('… บาท 1,842') or a
+        trailing marker cell ('… บาท *'), which the legacy check missed and which
+        caused the next sibling row to be merged into this item.
+
+    An embedded per-unit price ('ๆ ละ 6,500 บาท') stays inside one text cell, so it
+    is never a standalone marker word and does not trigger a close.
+    """
+    tokens = str(line).split()
+    if tokens and tokens[-1].replace('-', '').replace('*', '') == 'บาท':
+        return True
+    return any(_is_baht_marker(w.text) for w in line.words)
+
+
 def get_year_from_string(text: str) -> Tuple[int, int]:
     # ปี 2563 ตั�งงบประมาณ 616,834,700 บาท -> 2563, 2563
     # ปี 2563-2564 ตั�งงบประมาณ 616,834,700 บาท -> 2563, 2564
@@ -282,7 +302,7 @@ def get_entries(lines: List[LineText]):
 
         if bullet_flag or proj_outp_flag:
             entry.append(line_id)
-            if line_text[-1].replace('-', '').replace('*', '') == 'บาท':
+            if _line_bears_total_column(line_id):
                 entries.append(
                     ('item' if bullet_flag else proj_outp_flag, entry))
                 bullet_flag = False
