@@ -74,6 +74,45 @@ def get_amount_from_string(text: str) -> float:
         return 0.0
 
 
+_AMOUNT_TOKEN = re.compile(r'^\d{1,3}(?:,\d{3})*(?:\.\d+)?$')
+
+
+def _parse_amount_token(text: str):
+    """Float value of a standalone amount cell, or None if it isn't one."""
+    text = text.strip()
+    if _AMOUNT_TOKEN.match(text):
+        return float(text.replace(',', ''))
+    return None
+
+
+def _is_baht_marker(text: str) -> bool:
+    """True for the 'บาท' total-column cell, allowing trailing markers ('บาท *')."""
+    return text.replace('*', '').replace('-', '').strip() == 'บาท'
+
+
+def get_amount_from_lines(lines) -> float:
+    """Amount of a budget item, read from its total *column*.
+
+    In the source xlsx each row keeps its total in a dedicated numeric column,
+    flattened as a standalone 'บาท' word right after the number. Descriptive text
+    (which may embed a per-unit price like 'ๆ ละ 6,500 บาท') stays inside one
+    earlier word, so it is never mistaken for the total. We return the first such
+    number→'บาท' pair scanning the item's lines in order: for a single row that is
+    its own total; for rows that got merged (a sibling concatenated after a trailing
+    extra column), it is the first row's own total, not the sibling's.
+
+    Falls back to the legacy string scan when no total column is present.
+    """
+    for line in lines:
+        words = [w.text for w in line.words]
+        for i in range(1, len(words)):
+            if _is_baht_marker(words[i]):
+                value = _parse_amount_token(words[i - 1])
+                if value is not None:
+                    return value
+    return get_amount_from_string(' '.join(str(line) for line in lines))
+
+
 def get_year_from_string(text: str) -> Tuple[int, int]:
     # ปี 2563 ตั�งงบประมาณ 616,834,700 บาท -> 2563, 2563
     # ปี 2563-2564 ตั�งงบประมาณ 616,834,700 บาท -> 2563, 2564
@@ -397,7 +436,7 @@ def extract_tree_levels(
         node = BudgetItem(
             budget_type=itemtype_mapper[bud_item.itemtype],
             name=str(bud_item).replace('\n', '\t').strip(),
-            amount=get_amount_from_string(str(bud_item)),
+            amount=get_amount_from_lines(bud_item.lines),
             document=bud_item.document,
             page=bud_item.page_index,
             parent=parent,
