@@ -41,6 +41,8 @@ class BudgetItem(NodeMixin):
         parent: Optional['BudgetItem'] = None,
         children: Optional[List['BudgetItem']] = None,
         fiscal_year_budget: List['FiscalYearBudget'] = None,
+        row_start: Optional[int] = None,
+        row_end: Optional[int] = None,
     ):
         super().__init__()
         if isinstance(budget_type, BudgetType):
@@ -67,10 +69,16 @@ class BudgetItem(NodeMixin):
             raise ValueError(
                 f'fiscal_year_budget must be list, got {type(fiscal_year_budget)}')
 
+        for label, row in (('row_start', row_start), ('row_end', row_end)):
+            if row is not None and not isinstance(row, int):
+                raise ValueError(f'{label} must be int, got {type(row)}')
+
         self.name = name
         self.amount = amount
         self.document = document
         self.page = page
+        self.row_start = row_start
+        self.row_end = row_end
         if fiscal_year_budget is None:
             self.fiscal_year_budget = list()
         else:
@@ -121,6 +129,8 @@ class BudgetItem(NodeMixin):
             amount=json_obj.get('amount'),
             document=json_obj.get('document'),
             page=json_obj.get('page'),
+            row_start=json_obj.get('row_start'),
+            row_end=json_obj.get('row_end'),
             fiscal_year_budget=[
                 FiscalYearBudget.from_json(fyb)
                 for fyb in json_obj.get('fiscal_year_budget', list())
@@ -214,6 +224,8 @@ class BudgetItem(NodeMixin):
             'amount': self.amount,
             'document': self.document,
             'page': self.page,
+            'row_start': self.row_start,
+            'row_end': self.row_end,
             'fiscal_year_budget': [
                 fyb.to_json()
                 for fyb in self.fiscal_year_budget

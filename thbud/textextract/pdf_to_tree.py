@@ -48,6 +48,21 @@ class LineItem:
                 return line.page.document.filepath
         return None
 
+    @property
+    def _rows(self):
+        # a page-spanning entry keeps only its first page's rows, so the
+        # row_start:row_end extent never mixes indices of two pages/sheets
+        return [line.line_index for line in self.lines
+                if line.page.page_index == self.page_index]
+
+    @property
+    def row_start(self):
+        return min(self._rows)
+
+    @property
+    def row_end(self):
+        return max(self._rows)
+
     def __str__(self) -> str:
         return ' '.join(
             [str(line) for line in self.lines]
@@ -630,6 +645,8 @@ def extract_tree_levels(
             amount=get_amount_from_lines(bud_item.lines),
             document=bud_item.document,
             page=bud_item.page_index,
+            row_start=bud_item.row_start,
+            row_end=bud_item.row_end,
             parent=parent,
         )
 

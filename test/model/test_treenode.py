@@ -164,6 +164,8 @@ def test_generate_json():
     'amount': 1000,
     'document': 'path/to/test.pdf',
     'page': 1,
+    'row_start': None,
+    'row_end': None,
     'fiscal_year_budget': [],
     'children': [],
   }
@@ -194,6 +196,8 @@ def test_generate_json_with_children():
     'amount': 1000,
     'document': 'path/to/test.pdf',
     'page': 1,
+    'row_start': None,
+    'row_end': None,
     'fiscal_year_budget': [],
     'children': [
       {
@@ -202,6 +206,8 @@ def test_generate_json_with_children():
         'amount': 1000,
         'document': 'path/to/test.pdf',
         'page': 1,
+        'row_start': None,
+        'row_end': None,
         'fiscal_year_budget': [],
         'children': [],
       }
@@ -232,6 +238,8 @@ def test_generate_json_with_fiscal_year_budget():
     'amount': 1000,
     'document': 'path/to/test.pdf',
     'page': 1,
+    'row_start': None,
+    'row_end': None,
     'fiscal_year_budget': [
       {
         'line': 'ปี 2563 ตั้งงบประมาณ 1,000 บาท',
@@ -276,6 +284,8 @@ def test_generate_json_with_children_and_fiscal_year_budget():
     'amount': 1000,
     'document': 'path/to/test.pdf',
     'page': 1,
+    'row_start': None,
+    'row_end': None,
     'fiscal_year_budget': [
       {
         'line': 'ปี 2563 ตั้งงบประมาณ 1,000 บาท',
@@ -291,6 +301,8 @@ def test_generate_json_with_children_and_fiscal_year_budget():
         'amount': 1000,
         'document': 'path/to/test.pdf',
         'page': 1,
+        'row_start': None,
+        'row_end': None,
         'fiscal_year_budget': [],
         'children': [],
       }
