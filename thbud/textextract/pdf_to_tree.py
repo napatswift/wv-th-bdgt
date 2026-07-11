@@ -396,6 +396,176 @@ def add_level_to_entries_positions(entries: List[LineItem],):
         logger.debug('extract_tree_levels::level: {}'.format(bud_item.level))
 
 
+def _bullet_key(bud_item):
+    """(family, number components) of the item's leading bullet, or (None, None).
+
+    family: '(N)' > 'N' > 'N)' > 'N.N' > 'N.' groups get_patern_of_bullet's codes;
+    comps: the numeric path, e.g. '2.1.1' -> (2, 1, 1), '(3)' -> (3,).
+    """
+    toks = str(bud_item).split()
+    if not toks:
+        return None, None
+    tok = toks[0].rstrip(':')
+    _, code = get_patern_of_bullet(tok)
+    if not code:
+        return None, None
+    if code >= 50:
+        family = '(N)'
+    elif code == 30:
+        family = 'N'
+    elif code >= 20:
+        family = 'N)'
+    elif code == 1:
+        family = 'N.'
+    else:
+        family = 'N.N'
+    m = re.match(r'\(?([0-9.]+?)\)?\.?$', tok)
+    if not m:
+        return family, None
+    try:
+        comps = tuple(int(c) for c in m.group(1).split('.') if c != '')
+    except ValueError:
+        return family, None
+    return family, comps or None
+
+
+def _normalized_x0s(entries):
+    """Per-entry x0 normalized by page width, exactly as the x0 leveler does."""
+    page_end_x_sr = page_x1(entries)
+    page_x1_max = max(page_end_x_sr.values())
+    return [e.x0 + (page_x1_max - page_end_x_sr[e.page_index]) for e in entries]
+
+
+def _grammar_levels(entries, xs):
+    """Bullet-grammar (numbering-aware) level proposal for every entry.
+
+    A bulleted item anchors by its numbering:
+      - sibling anchor: a stack entry of the same family, same depth, same prefix
+        components and a smaller last component (strict +1 continuation preferred,
+        x0-nearest tiebreak for numbering gaps) -> becomes its sibling
+      - parent anchor: a stack entry whose components equal the item's components
+        minus the last one ('2.1.1' under '2.1') -> becomes its child
+      - a fresh '...1' with no anchor starts a new sub-list under the current top
+      - otherwise fall back to the x0 rule
+    Un-bulleted items use the x0 rule; headers reset the stack (as in
+    add_level_to_entries_positions). Returns a level per entry (None where the x0
+    leveler assigns none, i.e. fiscal-year lines).
+    """
+    x_diff_threshold = 0.005
+    out = [None] * len(entries)
+    stack = []  # (family, comps, lsx)
+
+    def x_pop_and_should_push(lsx):
+        while stack and stack[-1][2] > lsx + x_diff_threshold:
+            stack.pop()
+        return not stack or abs(stack[-1][2] - lsx) >= x_diff_threshold
+
+    for i, bud_item in enumerate(entries):
+        if bud_item.itemtype != 'item':
+            if bud_item.itemtype in ('budget_plan', 'PROJECT', 'OUTPUT'):
+                stack.clear()
+            if bud_item.itemtype == 'budget_plan':
+                out[i] = -2
+            elif bud_item.itemtype in ('PROJECT', 'OUTPUT'):
+                out[i] = -1
+            continue
+
+        lsx = xs[i]
+        family, comps = _bullet_key(bud_item)
+
+        if family and comps:
+            sib_cands = []
+            par_idx = None
+            for d in range(len(stack) - 1, -1, -1):
+                sfam, scomps, sx = stack[d]
+                if (sfam == family and scomps and len(scomps) == len(comps)
+                        and scomps[:-1] == comps[:-1] and comps[-1] > scomps[-1]):
+                    sib_cands.append(d)
+                if par_idx is None and scomps and scomps == comps[:-1]:
+                    par_idx = d
+            sib_idx = None
+            if sib_cands:
+                plus1 = [d for d in sib_cands
+                         if stack[d][1][-1] + 1 == comps[-1]]
+                if plus1:
+                    sib_idx = plus1[0]
+                else:
+                    sib_idx = min(sib_cands, key=lambda d: abs(stack[d][2] - lsx))
+            if sib_idx is not None and (par_idx is None or par_idx < sib_idx):
+                del stack[sib_idx:]
+            elif par_idx is not None:
+                del stack[par_idx + 1:]
+            elif comps[-1] == 1:
+                pass  # new sub-list: nest under the current top
+            elif not x_pop_and_should_push(lsx):
+                stack.pop()
+            stack.append((family, comps, lsx))
+        else:
+            if not x_pop_and_should_push(lsx):
+                stack.pop()
+            stack.append((None, None, lsx))
+        out[i] = len(stack)
+    return out
+
+
+def _sum_violations(item_idxs, levels, amounts):
+    """# of parents (within one header segment, parentage from `levels` by the
+    nearest-smaller rule) whose amount differs from the sum of their children's."""
+    children = {}
+    stack = []  # (idx, level)
+    for i in item_idxs:
+        while stack and stack[-1][1] >= levels[i]:
+            stack.pop()
+        if stack:
+            children.setdefault(stack[-1][0], []).append(i)
+        stack.append((i, levels[i]))
+    bad = 0
+    for p, kids in children.items():
+        pa = amounts[p]
+        ka = [amounts[k] for k in kids]
+        if pa is None or any(a is None for a in ka):
+            continue
+        if abs(pa - sum(ka)) > 0.005:
+            bad += 1
+    return bad
+
+
+def refine_levels_with_bullet_grammar(entries: List[LineItem]):
+    """Second leveling pass: the bullet grammar proposes, the money invariant vetoes.
+
+    Per header segment (the run of items between budget_plan/PROJECT/OUTPUT
+    entries), adopt the grammar's level proposal unless it INCREASES the number of
+    parent != sum(children) violations in that segment. x0 levels (already set by
+    add_level_to_entries_positions) stay wherever the grammar has nothing better
+    to say."""
+    if not entries:
+        return
+    xs = _normalized_x0s(entries)
+    proposed = _grammar_levels(entries, xs)
+
+    segment = []
+    for i, bud_item in list(enumerate(entries)) + [(len(entries), None)]:
+        if bud_item is not None and bud_item.itemtype == 'item':
+            segment.append(i)
+            continue
+        if bud_item is not None and bud_item.itemtype == 'fiscal_year':
+            continue
+        if segment:
+            current = [entries[j].level for j in segment]
+            wanted = [proposed[j] for j in segment]
+            if wanted != current:
+                amounts = {j: get_amount_from_lines(entries[j].lines)
+                           for j in segment}
+                v_current = _sum_violations(segment, dict(zip(segment, current)),
+                                            amounts)
+                v_wanted = _sum_violations(segment, dict(zip(segment, wanted)),
+                                           amounts)
+                if v_wanted <= v_current:
+                    for j in segment:
+                        entries[j].set_level(proposed[j])
+        segment = []
+
+
 def extract_tree_levels(
     bud_items: List[LineItem],
 ) -> BudgetItem:
@@ -406,6 +576,7 @@ def extract_tree_levels(
     """
 
     add_level_to_entries_positions(bud_items)
+    refine_levels_with_bullet_grammar(bud_items)
 
     itemtype_mapper = {
         'budget_plan': 'BUDGET_PLAN',
