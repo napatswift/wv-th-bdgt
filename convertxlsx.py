@@ -7,15 +7,12 @@ import re
 import concurrent.futures
 import traceback
 import pandas as pd
-import logging
+from loguru import logger
 
 
 OUTPUT_DIR = os.path.join('.', 'output-i', '2568_local-administration')
 xlsx_dir = './ฉบับร่างพระราชบัญญัติงบประมาณรายจ่าย (ร่าง พ.ร.บ.) (Excel)/'
-logger = logging.getLogger(__name__)
-logging.basicConfig(
-    filename='convertxlsx__.log',
-    level=logging.INFO)
+logger.add('convertxlsx__.log', level='INFO')
 
 
 class CannotFindStartPageError(Exception):
@@ -140,14 +137,14 @@ def process_file(file_path):
         for i in range(1, 12):
             if 'name_'+str(i) not in ministry_df.columns:
                 ministry_df['name_'+str(i)] = ''
-                print('name_'+str(i), 'not in columns')
+            logger.info(f'name_{i} not in columns')
         cols = extract_dataframe_columns(ministry_df)
         ministry_df = ministry_df[cols]
         ministry_df.to_csv(output_file_path, index=False)
-        logger.info('Saved CSV to ' + output_file_path)
+    logger.info(f'Saved CSV to {output_file_path}')
 
         """
-        print('Done', file_path)
+    logger.info(f'Done {file_path}')
 
         with open(output_file_path, 'w') as fp:
             json.dump(
@@ -159,12 +156,12 @@ def process_file(file_path):
         """
 
     except CannotFindStartPageError as e:
-        logger.error(str(e) + ' in', '"'+file_path+'"')
+        logger.error(f'{e} in "{file_path}"')
     except NoEntriesFoundError as e:
-        logger.error(str(e) + ' in', '"'+file_path+'"')
+        logger.error(f'{e} in "{file_path}"')
     except Exception as e:
         # print the error and traceback
-        logger.error(str(e) + ' in', '"'+file_path+'"')
+        logger.error(f'{e} in "{file_path}"')
         traceback.print_exc()
         return
 
@@ -183,19 +180,18 @@ def build_tree_for_ministry(ministry_name, file_paths):
     tree_list = []
     for file_path in file_paths:
         file_name = os.path.basename(file_path)
-        budget_unit_logger = logging.getLogger(re.sub(r'\s+', '_', file_name))
-        budget_unit_logger.info('Processing "{}"'.format(file_path))
+        logger.info(f'Processing "{file_path}"')
         try:
             tree = build_tree_from_xlsx(file_path)
             tree.name = os.path.basename(file_path)
             tree.budget_type = BudgetType.BUDGETARY_UNIT
             tree.parent = root
         except CannotFindStartPageError as e:
-            budget_unit_logger.error('{} in "{}"'.format(str(e), file_path))
+            logger.error(f'{e} in "{file_path}"')
         except NoEntriesFoundError as e:
-            budget_unit_logger.error('{} in "{}"'.format(str(e), file_path))
+            logger.error(f'{e} in "{file_path}"')
         except Exception as e:
-            budget_unit_logger.error('{} in "{}"'.format(str(e), file_path))
+            logger.error(f'{e} in "{file_path}"')
             traceback.print_exc()
             return
 
@@ -215,18 +211,18 @@ def build_tree_for_ministry(ministry_name, file_paths):
             indent=4
         )
     
-    logger.info('Saved JSON to ' + output_file_path)
+    logger.info(f'Saved JSON to {output_file_path}')
 
     ministry_df = pd.DataFrame(root.to_rows())
     for i in range(1, 12):
         if 'name_'+str(i) not in ministry_df.columns:
-            print('name_'+str(i), 'not in columns')
+            logger.info(f'name_{i} not in columns')
             ministry_df['name_'+str(i)] = ''
     cols = extract_dataframe_columns(ministry_df)
     ministry_df = ministry_df[cols]
     ministry_df.to_csv(csv_file_path, index=False)
 
-    logger.info('Saved CSV to ' + csv_file_path)
+    logger.info(f'Saved CSV to {csv_file_path}')
 
     return tree_list
 
@@ -244,10 +240,9 @@ def group_files_by_directory(file_paths):
 
 
 def main():
-    logger.setLevel(0)
     logger.info('*'*80)
-    logger.info('Start processing ' + xlsx_dir)
-    logger.info('Output to ' + OUTPUT_DIR)
+    logger.info(f'Start processing {xlsx_dir}')
+    logger.info(f'Output to {OUTPUT_DIR}')
     logger.info('*'*80)
     # process_file(
     #     'ฉบับร่างพระราชบัญญัติงบประมาณรายจ่าย (ร่าง พ.ร.บ.) (Excel)/เล่ม 5/กระทรวงคมนาคม/AO_08006 กรมทางหลวง 08.05.67.xlsx'
@@ -339,9 +334,7 @@ def main():
         #         file_paths, interested_bud_units
         #     )
 
-        logger.info('Processing {} files for {}'.format(
-            len(file_paths), ministry_name
-        ))
+        logger.info(f'Processing {len(file_paths)} files for {ministry_name}')
 
         # file_paths = [f for f in file_paths if '11012' in f]
 
