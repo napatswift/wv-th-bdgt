@@ -252,6 +252,14 @@ def is_redundant_line(line_text: List[str]):
     return False
 
 
+_PERSONNEL_HEADERS = (
+    'รายการบุคลากรภาครัฐ',
+    'รายการบ�คลากร�าครั�',
+    'รายการบ�คลากรภาครัฐ',
+    'รายการบ�คลากร�าครัฐ',
+    'รายการบุคลากรภาครั�',
+)
+
 _OFF_BUDGET_MARKERS = ('เงินนอกงบประมาณ', 'เงินน�กงบประมาณ')
 
 
@@ -279,6 +287,14 @@ def get_entries(lines: List[LineText]):
 
         # then split by whitespace
         line_text = line_text_string.split()
+
+        # a unit's personnel block header ('รายการบุคลากรภาครัฐ') starts a new
+        # unit (one per sheet in ministry-overview files): reset the level
+        # stack so its '1. งบบุคลากร' cannot nest under the previous unit
+        if (line_text and line_text[0] in _PERSONNEL_HEADERS and not entry
+                and not line.page.contains_table):
+            entries.append(('reset', [line_id]))
+            continue
 
         # skiping
         if is_redundant_line(line_text):
@@ -384,6 +400,10 @@ def get_entries(lines: List[LineText]):
     ]
 
 
+# entry types that start a fresh level stack; 'reset' does so without a node
+_STACK_RESETS = ('budget_plan', 'PROJECT', 'OUTPUT', 'reset')
+
+
 def add_level_to_entries_positions(entries: List[LineItem],):
     x_diff_threshold = 0.005
 
@@ -402,7 +422,7 @@ def add_level_to_entries_positions(entries: List[LineItem],):
             # then it is a budget unit header.
             # In this case, we clear the stack
             # and add a new level to the levels list.
-            if bud_item.itemtype in ['budget_plan', 'PROJECT', 'OUTPUT']:
+            if bud_item.itemtype in _STACK_RESETS:
                 stack_x = []
 
             if bud_item.itemtype == 'budget_plan':
@@ -519,7 +539,7 @@ def _grammar_levels(entries, xs):
 
     for i, bud_item in enumerate(entries):
         if bud_item.itemtype != 'item':
-            if bud_item.itemtype in ('budget_plan', 'PROJECT', 'OUTPUT'):
+            if bud_item.itemtype in _STACK_RESETS:
                 stack.clear()
             if bud_item.itemtype == 'budget_plan':
                 out[i] = -2
@@ -656,6 +676,9 @@ def extract_tree_levels(
     }]
 
     for bud_item in bud_items:
+        if bud_item.itemtype == 'reset':
+            continue
+
         if bud_item.itemtype == 'fiscal_year':
             last_node = parent_stack[-1]['node']
             year_start, year_end = get_year_from_string(str(bud_item))
