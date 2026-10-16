@@ -3,6 +3,7 @@ from typing import List, Tuple
 from ..textextract import DocumentText, PageText, LineText
 from .text import is_baht_marker
 from ..model import BudgetItem, FiscalYearBudget
+import math
 import re
 import logging
 
@@ -227,6 +228,16 @@ def check_proj_outp(target, line_text):
     return False
 
 
+# An unbulleted 'รายการไม่ผูกพัน A บาท' row (source typo: ผูกผัน). Sources split
+# an item P into 'รายการไม่ผูกพัน A' + 'รายการผูกพัน B' and often list only the
+# ผูกพัน items under 'ประกอบด้วย', so the ไม่ผูกพัน row is then a real child of P.
+# The 'รายการผูกพัน' row is never kept: its amount is what the listed items carry.
+_UNCOMMITTED_SUBTOTAL = re.compile(r'^รายการไม่ผูก(พัน|ผัน)$')
+UNCOMMITTED_SUBTOTAL = 'uncommitted_subtotal'
+
+_HEADER_TYPES = ('budget_plan', 'PROJECT', 'OUTPUT')
+
+
 def get_entries(lines: List[LineText]):
     # flags
     bullet_flag = False
@@ -325,6 +336,15 @@ def get_entries(lines: List[LineText]):
                     or 'เงินน�กงบประมาณ' in line_text
                     or 'เงินงบประมาณ' in line_text
             ):
+                continue
+
+            if (
+                _UNCOMMITTED_SUBTOTAL.match(line_text[0])
+                    and _line_bears_total_column(line_id)
+            ):
+                # kept or dropped by resolve_uncommitted_subtotals once the
+                # tree's levels (and so its sums) are known
+                entries.append((UNCOMMITTED_SUBTOTAL, [line_id]))
                 continue
 
             logger.warning((
@@ -559,8 +579,8 @@ def refine_levels_with_bullet_grammar(entries: List[LineItem]):
         if bud_item is not None and bud_item.itemtype == 'item':
             segment.append(i)
             continue
-        if bud_item is not None and bud_item.itemtype == 'fiscal_year':
-            continue
+        if bud_item is not None and bud_item.itemtype not in _HEADER_TYPES:
+            continue  # fiscal-year lines and unresolved subtotals
         if segment:
             current = [entries[j].level for j in segment]
             wanted = [proposed[j] for j in segment]
@@ -577,6 +597,86 @@ def refine_levels_with_bullet_grammar(entries: List[LineItem]):
         segment = []
 
 
+def resolve_uncommitted_subtotals(entries: List[LineItem]) -> List[LineItem]:
+    """Keep each 'รายการไม่ผูกพัน' subtotal only where it closes its parent's gap.
+
+    Runs after leveling, when parentage (and so every parent's children sum) is
+    known. The candidate takes the level of the next real item — the listed items
+    it is printed alongside — rather than its own x0, and is kept as an item only
+    if the parent that level gives it is short by exactly its amount
+    (parent - sum(children) == A). Otherwise the listed items already include the
+    ไม่ผูกพัน items (or it belongs elsewhere) and it is dropped, as before.
+    Returns the entries without the dropped candidates."""
+    out = list(entries)
+    i = 0
+    while i < len(out):
+        cand = out[i]
+        if cand.itemtype != UNCOMMITTED_SUBTOTAL:
+            i += 1
+            continue
+        level = _gap_closing_level(out, i)
+        if level is not None:
+            cand.itemtype = 'item'
+            cand.set_level(level)
+            i += 1
+        else:
+            line = cand.lines[0]
+            logger.warning((
+                f'SKIPPED page {line.page.page_index},'
+                f' line {line.line_index} '
+                f'👉🏽 {cand} (does not close its parent\'s gap)'
+            ))
+            del out[i]
+    return out
+
+
+def _gap_closing_level(entries: List[LineItem], ci: int):
+    """The level at which candidate `ci` exactly closes its parent's gap, or None."""
+    nxt = None
+    for j in range(ci + 1, len(entries)):
+        t = entries[j].itemtype
+        if t in _HEADER_TYPES:
+            return None
+        if t == 'item':
+            nxt = j
+            break
+    if nxt is None:
+        return None
+    level = entries[nxt].level
+
+    def is_node(e):
+        return e.itemtype == 'item' or e.itemtype in _HEADER_TYPES
+
+    parent = next((j for j in range(ci - 1, -1, -1)
+                   if is_node(entries[j]) and entries[j].level < level), None)
+    if parent is None:
+        return None
+    # children of `parent`: by the nearest-smaller rule extract_tree_levels uses,
+    # the nodes after it at levels deeper than its own whose nearest shallower
+    # predecessor is `parent`
+    stack = [parent]
+    children = []
+    for j in range(parent + 1, len(entries)):
+        e = entries[j]
+        if not is_node(e):
+            continue
+        if e.level <= entries[parent].level:
+            break
+        while entries[stack[-1]].level >= e.level:
+            stack.pop()
+        if stack[-1] == parent:
+            children.append(j)
+        stack.append(j)
+
+    amount = get_amount_from_lines(entries[ci].lines)
+    p_amount = get_amount_from_lines(entries[parent].lines)
+    gap = p_amount - math.fsum(get_amount_from_lines(entries[j].lines)
+                               for j in children)
+    if amount > 0 and abs(gap - amount) <= 0.005:
+        return level
+    return None
+
+
 def extract_tree_levels(
     bud_items: List[LineItem],
 ) -> BudgetItem:
@@ -588,6 +688,7 @@ def extract_tree_levels(
 
     add_level_to_entries_positions(bud_items)
     refine_levels_with_bullet_grammar(bud_items)
+    bud_items = resolve_uncommitted_subtotals(bud_items)
 
     itemtype_mapper = {
         'budget_plan': 'BUDGET_PLAN',
