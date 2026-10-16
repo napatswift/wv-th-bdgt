@@ -43,7 +43,10 @@ class LineItem:
 
     @property
     def x0(self):
-        return min(line.x0 for line in self.lines)
+        # the first row (the bullet row) sets the entry's indentation; a
+        # continuation row typed into column A with leading spaces must not
+        # out-dent the whole entry
+        return self.lines[0].x0
 
     @property
     def document(self):
