@@ -359,15 +359,27 @@ def get_entries(lines: List[LineText]):
 
 
 def add_level_to_entries_positions(entries: List[LineItem],):
+    """First leveling pass: level = depth of the item's x0 on an indentation stack."""
+    levels = _x0_levels(entries, _normalized_x0s(entries))
+    for bud_item, level in zip(entries, levels):
+        if level is not None:
+            bud_item.set_level(level)
+
+
+def _x0_levels(entries, xs):
+    """Indentation (x0) level proposal for every entry, given normalized x0s.
+
+    Items get the depth of their x on a stack of strictly increasing x positions
+    (deeper x pushes, shallower x pops, equal x is a sibling). budget_plan /
+    PROJECT / OUTPUT headers reset the stack and get -2 / -1; fiscal-year lines
+    get None (they attach to the preceding node)."""
     x_diff_threshold = 0.005
+    out = [None] * len(entries)
 
     # stores min x position
     stack_x = []
 
-    page_end_x_sr = page_x1(entries)
-    page_x1_max = max(page_end_x_sr.values())
-
-    for bud_item in entries:
+    for i, bud_item in enumerate(entries):
         # LOGGING
         logger.debug(f'extract_tree_levels::{(bud_item)}')
 
@@ -380,31 +392,18 @@ def add_level_to_entries_positions(entries: List[LineItem],):
                 stack_x = []
 
             if bud_item.itemtype == 'budget_plan':
-                bud_item.set_level(-2)
+                out[i] = -2
             elif (
                 bud_item.itemtype == 'PROJECT'
                 or bud_item.itemtype == 'OUTPUT'
             ):
-                bud_item.set_level(-1)
+                out[i] = -1
 
             continue
 
-        # pex is the x position of the end of the page
-        # that the budget unit is on.
-        pex = page_end_x_sr[bud_item.page_index]
-
-        # LOGGING
-        logger.debug(
-            'extract_tree_levels::page x1 max: {}'.format(page_x1_max))
-
-        # lsx is the x start position of the first line of the budget unit.
-        lsx = bud_item.x0 + (page_x1_max - pex)
-
-        # LOGGING
-        logger.debug(
-            ('extract_tree_levels::line x0: '
-             'bud_item.x0={} + (page_x1_max={} - pex={}) = {}')
-            .format(bud_item.x0, page_x1_max, pex, lsx))
+        # lsx is the x start position of the first line of the budget unit,
+        # normalized by its page's width.
+        lsx = xs[i]
 
         # If the previous item has an x position that is more than
         # the threshold greater than this item's x position,
@@ -421,10 +420,11 @@ def add_level_to_entries_positions(entries: List[LineItem],):
             stack_x.append(lsx)
 
         # The level of the current item is the length of the stack.
-        bud_item.set_level(len(stack_x))
+        out[i] = len(stack_x)
 
         # LOGGING
-        logger.debug('extract_tree_levels::level: {}'.format(bud_item.level))
+        logger.debug('extract_tree_levels::level: {}'.format(out[i]))
+    return out
 
 
 def _bullet_key(bud_item):
@@ -467,7 +467,7 @@ def _normalized_x0s(entries):
     return [e.x0 + (page_x1_max - page_end_x_sr[e.page_index]) for e in entries]
 
 
-def _grammar_levels(entries, xs):
+def _grammar_levels(entries, xs, pinned=frozenset()):
     """Bullet-grammar (numbering-aware) level proposal for every entry.
 
     A bulleted item anchors by its numbering:
@@ -481,10 +481,21 @@ def _grammar_levels(entries, xs):
     Un-bulleted items use the x0 rule; headers reset the stack (as in
     add_level_to_entries_positions). Returns a level per entry (None where the x0
     leveler assigns none, i.e. fiscal-year lines).
+
+    `pinned` entries (indices) are never popped by a numbering anchor while their
+    x encloses the item: an anchor found beneath one nests the item under it
+    instead (a grammar-blind parent, e.g. an activity row between '1.' and '1.1').
     """
     x_diff_threshold = 0.005
     out = [None] * len(entries)
-    stack = []  # (family, comps, lsx)
+    stack = []  # (family, comps, lsx, entry index)
+
+    def anchor_cut(cut, lsx):
+        # keep a pinned, x-enclosing entry at or above the anchor's cut point
+        for d in range(len(stack) - 1, cut - 1, -1):
+            if stack[d][3] in pinned and stack[d][2] < lsx - x_diff_threshold:
+                return d + 1
+        return cut
 
     def x_pop_and_should_push(lsx):
         while stack and stack[-1][2] > lsx + x_diff_threshold:
@@ -508,7 +519,7 @@ def _grammar_levels(entries, xs):
             sib_cands = []
             par_idx = None
             for d in range(len(stack) - 1, -1, -1):
-                sfam, scomps, sx = stack[d]
+                sfam, scomps, sx, _ = stack[d]
                 if (sfam == family and scomps and len(scomps) == len(comps)
                         and scomps[:-1] == comps[:-1] and comps[-1] > scomps[-1]):
                     sib_cands.append(d)
@@ -523,20 +534,101 @@ def _grammar_levels(entries, xs):
                 else:
                     sib_idx = min(sib_cands, key=lambda d: abs(stack[d][2] - lsx))
             if sib_idx is not None and (par_idx is None or par_idx < sib_idx):
-                del stack[sib_idx:]
+                del stack[anchor_cut(sib_idx, lsx):]
             elif par_idx is not None:
-                del stack[par_idx + 1:]
+                del stack[anchor_cut(par_idx + 1, lsx):]
             elif comps[-1] == 1:
                 pass  # new sub-list: nest under the current top
             elif not x_pop_and_should_push(lsx):
                 stack.pop()
-            stack.append((family, comps, lsx))
+            stack.append((family, comps, lsx, i))
         else:
             if not x_pop_and_should_push(lsx):
                 stack.pop()
-            stack.append((None, None, lsx))
+            stack.append((None, None, lsx, i))
         out[i] = len(stack)
     return out
+
+
+_HEADER_TYPES = ('budget_plan', 'PROJECT', 'OUTPUT')
+_CATEGORY_FAMILIES = ('N.N', 'N.', 'N)')
+
+
+def _is_activity_row(bud_item):
+    """An un-bulleted 'กิจกรรม…' (activity) item row."""
+    if bud_item.itemtype != 'item':
+        return False
+    toks = str(bud_item).split()
+    return (bool(toks) and toks[0].startswith('กิจกรรม')
+            and _bullet_key(bud_item)[0] is None)
+
+
+def _activity_x_shifts(entries, xs):
+    """x offsets that re-nest activity rows printed at a category's indent.
+
+    Highways house style prints an un-bulleted 'กิจกรรม…' row at the very indent of
+    the 'N.' / 'N.N…' / 'N)' category rows around it, so x0 alone makes them
+    siblings:
+      - category-first: the nearest preceding item at the same-or-lower x is a
+        category at the SAME x -> the activity is its child (+0.5); a following
+        activity at that x after such a child inherits the shift (its sibling);
+      - activity-first: otherwise, if the next item at the same-or-lower x is a
+        category at the same x -> the activity is the parent of those (-0.5);
+      - an activity printed deeper, inside the items of such a nested activity
+        (at the '(N)' indent), is moved up beside it: a กิจกรรม is never the
+        child of another กิจกรรม.
+    Neighbours are looked up within the activity's header segment. Returns
+    {entry index: dx}; empty when no activity row is printed this way."""
+    eps = 0.005
+    shifts = {}
+    nested = set()  # activities moved under their category (category-first)
+
+    def neighbour(i, step):
+        j = i + step
+        while 0 <= j < len(entries):
+            e = entries[j]
+            if e.itemtype in _HEADER_TYPES:
+                return None
+            if e.itemtype == 'item' and xs[j] <= xs[i] + eps:
+                return j
+            j += step
+        return None
+
+    def enclosing(i):
+        # nearest preceding item strictly shallower than this one (x0 parent)
+        for j in range(i - 1, -1, -1):
+            e = entries[j]
+            if e.itemtype in _HEADER_TYPES:
+                return None
+            if e.itemtype == 'item' and xs[j] < xs[i] - eps:
+                return j
+        return None
+
+    def same_x_category(i, j):
+        return (j is not None and abs(xs[j] - xs[i]) < eps
+                and _bullet_key(entries[j])[0] in _CATEGORY_FAMILIES)
+
+    def nest_beside(i, a):
+        shifts[i] = xs[a] + shifts[a] - xs[i]
+        nested.add(i)
+
+    for i, e in enumerate(entries):
+        if not _is_activity_row(e):
+            continue
+        prev = neighbour(i, -1)
+        if prev is not None and abs(xs[prev] - xs[i]) < eps:
+            if _is_activity_row(entries[prev]):
+                if prev in nested:
+                    nest_beside(i, prev)
+            elif same_x_category(i, prev):
+                shifts[i] = +0.5
+                nested.add(i)
+            elif enclosing(i) in nested:
+                # printed at the indent of a nested activity's own items
+                nest_beside(i, enclosing(i))
+        elif same_x_category(i, neighbour(i, +1)):
+            shifts[i] = -0.5
+    return shifts
 
 
 def _sum_violations(item_idxs, levels, amounts):
@@ -562,17 +654,31 @@ def _sum_violations(item_idxs, levels, amounts):
 
 
 def refine_levels_with_bullet_grammar(entries: List[LineItem]):
-    """Second leveling pass: the bullet grammar proposes, the money invariant vetoes.
+    """Second leveling pass: structural proposals, vetoed by the money invariant.
 
     Per header segment (the run of items between budget_plan/PROJECT/OUTPUT
-    entries), adopt the grammar's level proposal unless it INCREASES the number of
-    parent != sum(children) violations in that segment. x0 levels (already set by
-    add_level_to_entries_positions) stay wherever the grammar has nothing better
-    to say."""
+    entries) the x0 levels (already set by add_level_to_entries_positions) are
+    the incumbent, and two proposals compete with them:
+      - the bullet grammar's re-leveling, adopted unless it INCREASES the number
+        of parent != sum(children) violations in the segment;
+      - the activity-row re-nesting (_activity_x_shifts: x0 and grammar levels
+        recomputed with same-indent 'กิจกรรม…' rows moved under / above their
+        category), adopted only if it STRICTLY reduces the violations of the
+        level set chosen so far. It is a guess from layout, so it never wins a
+        tie and can never make a segment's sums worse."""
     if not entries:
         return
     xs = _normalized_x0s(entries)
     proposed = _grammar_levels(entries, xs)
+
+    shifts = _activity_x_shifts(entries, xs)
+    activity_proposals = []
+    if shifts:
+        xs_act = [x + shifts.get(i, 0) for i, x in enumerate(xs)]
+        activities = frozenset(i for i, e in enumerate(entries)
+                               if _is_activity_row(e))
+        activity_proposals = [_grammar_levels(entries, xs_act, activities),
+                              _x0_levels(entries, xs_act)]
 
     segment = []
     for i, bud_item in list(enumerate(entries)) + [(len(entries), None)]:
@@ -582,18 +688,9 @@ def refine_levels_with_bullet_grammar(entries: List[LineItem]):
         if bud_item is not None and bud_item.itemtype not in _HEADER_TYPES:
             continue  # fiscal-year lines and unresolved subtotals
         if segment:
-            current = [entries[j].level for j in segment]
-            wanted = [proposed[j] for j in segment]
-            if wanted != current:
-                amounts = {j: get_amount_from_lines(entries[j].lines)
-                           for j in segment}
-                v_current = _sum_violations(segment, dict(zip(segment, current)),
-                                            amounts)
-                v_wanted = _sum_violations(segment, dict(zip(segment, wanted)),
-                                           amounts)
-                if v_wanted <= v_current:
-                    for j in segment:
-                        entries[j].set_level(proposed[j])
+            touched = any(j in shifts for j in segment)
+            _adopt_vetoed_levels(entries, segment, proposed,
+                                 activity_proposals if touched else [])
         segment = []
 
 
@@ -675,6 +772,37 @@ def _gap_closing_level(entries: List[LineItem], ci: int):
     if amount > 0 and abs(gap - amount) <= 0.005:
         return level
     return None
+
+
+def _adopt_vetoed_levels(entries, segment, grammar, activity_proposals):
+    """Set one segment's levels to the best of the x0 / grammar / activity levels.
+
+    The grammar replaces the incumbent x0 levels unless it adds violations; each
+    activity proposal (in order) then replaces the result only if it has
+    strictly fewer violations."""
+    current = [entries[j].level for j in segment]
+    wanted = [grammar[j] for j in segment]
+    options = [[p[j] for j in segment] for p in activity_proposals]
+    if wanted == current and not options:
+        return
+
+    amounts = {j: get_amount_from_lines(entries[j].lines) for j in segment}
+
+    def violations(levels):
+        return _sum_violations(segment, dict(zip(segment, levels)), amounts)
+
+    best, v_best = current, violations(current)
+    if wanted != current:
+        v_wanted = violations(wanted)
+        if v_wanted <= v_best:
+            best, v_best = wanted, v_wanted
+    for levels in options:
+        v = violations(levels)
+        if v < v_best:
+            best, v_best = levels, v
+    if best is not current:
+        for j, level in zip(segment, best):
+            entries[j].set_level(level)
 
 
 def extract_tree_levels(
