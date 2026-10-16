@@ -72,17 +72,17 @@ def test_wrapped_description_without_a_bullet_still_merges():
 
 
 def test_amountless_header_is_vetoed_like_its_filled_amount():
-    # อปท 2570 files repeat the plan heading on a duplicate sheet: a fresh
-    # '1. รายละเอียด…' list with no total of its own. The bullet grammar would
-    # nest it under the last '(1)' leaf; the money veto must weigh the header
-    # at the sum of its children (as autofix will fill it), not ignore it.
+    # A fresh '1.' list whose header has no total of its own (e.g. a
+    # duplicate sheet's plan heading): the bullet grammar would nest it under
+    # the last '(1)' leaf; the money veto must weigh the header at the sum of
+    # its children (as autofix will fill it), not ignore it.
     root = extract_tree_levels(get_entries(make_page([
         (0, ["ผลผลิต : ผลผลิตการจัดบริการสาธารณะ", "100", "บาท"]),
         (0, ["1. งบเงินอุดหนุน", "100", "บาท"]),
         (1, ["1.1 เงินอุดหนุนเฉพาะกิจ", "100", "บาท"]),
         (2, ["1) ค่าที่ดิน/สิ่งก่อสร้าง", "100", "บาท"]),
         (4, ["(1) ค่าปรับปรุงทางและสะพาน", "100", "บาท"]),
-        (0, ["1. รายละเอียดงบประมาณจำแนกตามแผนงาน และ ผลผลิต/โครงการ"]),
+        (0, ["1. แผนงานยุทธศาสตร์"]),
         (1, ["1.1 แผนงานยุทธศาสตร์ส่งเสริมการกระจายอำนาจ", "250", "บาท"]),
     ]).lines))
     assert node(root, "(1) ค่าปรับปรุงทางและสะพาน").children == ()

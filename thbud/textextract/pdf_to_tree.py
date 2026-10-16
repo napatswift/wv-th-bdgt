@@ -256,8 +256,15 @@ def is_classifier(string):
     return string in ['แห่ง', 'สายทาง']
 
 
+# A section title ("1. รายละเอียดงบประมาณจำแนกตามแผนงาน และ ผลผลิต/โครงการ",
+# "7. …"): it opens the detail section, it is not a budget line.
+_SECTION_TITLE = re.compile(r'^(\d+\.)?รายละเอียดงบประมาณ(รายจ่าย)?จ.{1,3}แนกตาม')
+
+
 def is_redundant_line(line_text: List[str]):
     if not line_text or ' '.join(line_text).isdigit():
+        return True
+    if _SECTION_TITLE.match(''.join(line_text)):
         return True
 
     for text in line_text:
