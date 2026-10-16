@@ -77,3 +77,12 @@ def test_plain_single_amount_unchanged():
 def test_no_amount_returns_zero():
     lines = [line("3.2.1 ค่าจ้างเหมาบริการ", "-", "บาท")]
     assert get_amount_from_lines(lines) == 0.0
+
+
+def test_baht_marker_with_stray_leading_dot():
+    # Chiang Mai/Lampang/Lamphun/Mae Hong Son municipality exports pad both the
+    # amount and the marker cell with newlines, and the marker cell starts with a
+    # stray '.': D22='\n\n\n\n2,643,000' E22='.\n\n\n\nบาท' (เทศบาลตำบลไชยปราการ).
+    lines = [line("(1) รถบรรทุกขยะ ขนาด 6 ตัน 6 ล้อ \nปริมาตรกระบอกสูบไม่ต่ำกว่า 6,000 ซีซี",
+                  "\n\n\n\n2,643,000", ".\n\n\n\nบาท")]
+    assert get_amount_from_lines(lines) == 2643000.0

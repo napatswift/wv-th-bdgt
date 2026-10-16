@@ -100,9 +100,13 @@ def _parse_amount_token(text: str):
     return None
 
 
+_BAHT_MARKER_NOISE = re.compile(r'[\s.*\-]')
+
+
 def _is_baht_marker(text: str) -> bool:
-    """True for the 'บาท' total-column cell, allowing trailing markers ('บาท *')."""
-    return text.replace('*', '').replace('-', '').strip() == 'บาท'
+    """True for the 'บาท' total-column cell, allowing trailing markers ('บาท *')
+    and padding noise: some municipal exports write the cell as '.\\n\\n\\nบาท'."""
+    return _BAHT_MARKER_NOISE.sub('', text) == 'บาท'
 
 
 def get_amount_from_lines(lines) -> float:
