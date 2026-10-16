@@ -457,7 +457,11 @@ def _grammar_levels(entries, xs):
     A bulleted item anchors by its numbering:
       - sibling anchor: a stack entry of the same family, same depth, same prefix
         components and a smaller last component (strict +1 continuation preferred,
-        x0-nearest tiebreak for numbering gaps) -> becomes its sibling
+        x0-nearest tiebreak for numbering gaps) -> becomes its sibling. Several +1
+        candidates mean a list restarted inside another ('(1) ค่าครุภัณฑ์' holding
+        its own '(1)'): the x0-nearest wins, but only among candidates reachable
+        by popping entries of the item's own family -- a +1 candidate behind a
+        '1.'/'1.1' row belongs to an earlier block
       - parent anchor: a stack entry whose components equal the item's components
         minus the last one ('2.1.1' under '2.1') -> becomes its child, used only
         when there is no sibling anchor: a components-parent deeper than a sibling
@@ -506,7 +510,10 @@ def _grammar_levels(entries, xs):
                 plus1 = [d for d in sib_cands
                          if stack[d][1][-1] + 1 == comps[-1]]
                 if plus1:
-                    sib_idx = plus1[0]
+                    reach = [d for d in plus1
+                             if all(stack[e][0] == family
+                                    for e in range(d + 1, plus1[0] + 1))]
+                    sib_idx = min(reach, key=lambda d: abs(stack[d][2] - lsx))
                 else:
                     sib_idx = min(sib_cands, key=lambda d: abs(stack[d][2] - lsx))
             if sib_idx is not None:

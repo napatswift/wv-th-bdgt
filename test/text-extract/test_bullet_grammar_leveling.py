@@ -12,7 +12,8 @@ from types import SimpleNamespace
 from anytree import PreOrderIter
 
 from thbud.textextract import LineText, PageText, WordText
-from thbud.textextract.pdf_to_tree import get_entries, extract_tree_levels
+from thbud.textextract.pdf_to_tree import (
+    _grammar_levels, _normalized_x0s, extract_tree_levels, get_entries)
 
 
 def make_page(rows):
@@ -200,3 +201,42 @@ def test_mis_bulleted_child_still_anchors_on_a_cross_family_parent():
         (4, ["(1) การพัฒนาระบบศูนย์กลางข้อมูล", "100", "บาท"]),
     ])
     assert node(root, "ค่าครุภัณฑ์").parent is node(root, "ค่าใช้จ่ายลงทุน")
+
+
+def test_continuation_picks_the_x0_nearest_of_equal_numbered_runs():
+    # EEC / สคพ pattern: '(1) ค่าครุภัณฑ์' holds a restarted '(1)' list printed
+    # space-indented (shallow x0). The next '(2)' continues both runs by number;
+    # its x0 matches the outer run, so it is the outer item's sibling, not the
+    # inner one's.
+    root = tree_of([
+        (1, ["1.1 เงินอุดหนุนทั่วไป", "100", "บาท"]),
+        (3, ["(1) ค่าครุภัณฑ์", "40", "บาท"]),
+        (1, ["(1) โครงการจัดทำระบบการให้บริการ", "40", "บาท"]),
+        (3, ["(2) ค่าที่ดิน/สิ่งก่อสร้าง", "25", "บาท"]),
+        (5, ["(1) ค่าจ้างบริษัทที่ปรึกษา", "25", "บาท"]),
+        (3, ["(3) เงินอุดหนุนค่าใช้จ่ายในการเจรจา", "35", "บาท"]),
+    ])
+    k11 = node(root, "เงินอุดหนุนทั่วไป")
+    assert node(root, "ค่าครุภัณฑ์").parent is k11
+    assert node(root, "ค่าที่ดิน/สิ่งก่อสร้าง").parent is k11
+    assert node(root, "เงินอุดหนุนค่าใช้จ่ายในการเจรจา").parent is k11
+    assert node(root, "โครงการจัดทำระบบ").parent is node(root, "ค่าครุภัณฑ์")
+
+
+def test_x0_tiebreak_does_not_jump_out_across_another_bullet_family():
+    # ยาเสพติด 21008 pattern: an equal-numbered '(1)' from the earlier '1.' block
+    # matches the x0 of '(2)' better than the nearest '(1)', but reaching it would
+    # pop the later '1.'/'1.1' rows. The x0 tiebreak only chooses among runs
+    # nested in one another through the item's own family. Checked on the
+    # grammar's proposal itself: the money veto would hide a wrong one here.
+    entries = get_entries(make_page([
+        (1, ["1. งบดำเนินงาน", "100", "บาท"]),
+        (2, ["1.1 ค่าตอบแทน ใช้สอยและวัสดุ", "100", "บาท"]),
+        (4, ["(1) ค่าใช้จ่ายในการรณรงค์", "100", "บาท"]),
+        (1, ["1. งบดำเนินงาน", "50", "บาท"]),
+        (2, ["1.1 ค่าตอบแทน ใช้สอยและวัสดุ", "50", "บาท"]),
+        (1, ["(1) ค่าใช้จ่ายในการพัฒนางานบำบัด", "20", "บาท"]),
+        (4, ["(2) ค่าติดตามดูแล", "30", "บาท"]),
+    ]).lines)
+    levels = _grammar_levels(entries, _normalized_x0s(entries))
+    assert levels[-1] == levels[-2]
