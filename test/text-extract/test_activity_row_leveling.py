@@ -171,3 +171,45 @@ def test_sums_veto_activity_renesting_that_does_not_reconcile():
     assert node(root, "กิจกรรมพิเศษ").parent is k
     assert node(root, "ครุภัณฑ์ยานพาหนะและขนส่ง").parent is k
 
+
+def test_activity_printed_at_item_indent_rejoins_its_sibling_activities():
+    # กรมทางหลวง 2570 'บำรุง' r10-r154: A11/A121 sit at the category's indent (3),
+    # but A142/A153 are printed at the (N)-item indent (4), inside A121's items.
+    # A กิจกรรม never nests inside another กิจกรรม: they are all children of
+    # 1.1.2.1 (2,503 + 574 + 202 + 27,494 = 30,774 in the source, scaled here).
+    root = tree_of([
+        (0, ["1.1.2 ค่าที่ดินและสิ่งก่อสร้าง", "100", "บาท"]),
+        (1, ["1.1.2.1 ค่าบำรุงรักษาทางและสะพาน", "100", "บาท"]),
+        (1, ["กิจกรรมบูรณะโครงข่ายทางหลวง", "25", "บาท"]),
+        (2, ["(1) งานบูรณะทางหลวง", "25", "บาท"]),
+        (1, ["กิจกรรมบำรุงรักษาสะพาน", "5", "บาท"]),
+        (2, ["(1) งานบำรุงรักษาสะพาน", "5", "บาท"]),
+        (2, ["กิจกรรมแก้ปัญหาการระบายน้ำ", "2", "บาท"]),
+        (2, ["(1) งานแก้ปัญหาการระบายน้ำ", "2", "บาท"]),
+        (2, ["กิจกรรมบำรุงรักษาทางหลวง", "68", "บาท"]),
+        (2, ["(1) งานบำรุงปกติ", "68", "บาท"]),
+    ])
+    cat = node(root, "1.1.2.1 ค่าบำรุงรักษา")
+    for name in ("กิจกรรมบูรณะ", "กิจกรรมบำรุงรักษาสะพาน",
+                 "กิจกรรมแก้ปัญหา", "กิจกรรมบำรุงรักษาทางหลวง"):
+        assert node(root, name).parent is cat
+    assert node(root, "งานแก้ปัญหาการระบายน้ำ").parent is node(root, "กิจกรรมแก้ปัญหา")
+    assert node(root, "งานบำรุงปกติ").parent is node(root, "กิจกรรมบำรุงรักษาทางหลวง")
+
+
+def test_activity_at_parenthesized_category_indent_nests_under_it():
+    # กรมทางหลวง 2569 'AO_บำรุง' r1557-r1565: under '1) ค่าที่ดิน/สิ่งก่อสร้าง' the
+    # first กิจกรรม is one indent deeper, the second is printed at the 1) indent;
+    # both are its children (88,450,000 + 92,357,400 = 180,807,400).
+    root = tree_of([
+        (0, ["2. งบรายจ่ายอื่น", "180", "บาท"]),
+        (2, ["1) ค่าที่ดิน/สิ่งก่อสร้าง", "180", "บาท"]),
+        (3, ["กิจกรรมบำรุงรักษาทางหลวง", "88", "บาท"]),
+        (4, ["(1) โครงการค่าสำรวจ", "88", "บาท"]),
+        (2, ["กิจกรรมการควบคุมน้ำหนักยานพาหนะบนทางหลวง", "92", "บาท"]),
+        (4, ["(1) ค่าที่ดินและสิ่งก่อสร้าง", "92", "บาท"]),
+    ])
+    k = node(root, "1) ค่าที่ดิน")
+    assert node(root, "กิจกรรมบำรุงรักษาทางหลวง").parent is k
+    assert node(root, "กิจกรรมการควบคุมน้ำหนัก").parent is k
+

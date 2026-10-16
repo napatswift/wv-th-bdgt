@@ -535,7 +535,7 @@ def _grammar_levels(entries, xs, pinned=frozenset()):
 
 
 _HEADER_TYPES = ('budget_plan', 'PROJECT', 'OUTPUT')
-_CATEGORY_FAMILIES = ('N.N', 'N.')
+_CATEGORY_FAMILIES = ('N.N', 'N.', 'N)')
 
 
 def _is_activity_row(bud_item):
@@ -548,19 +548,24 @@ def _is_activity_row(bud_item):
 
 
 def _activity_x_shifts(entries, xs):
-    """x offsets that re-nest activity rows printed at a dotted category's indent.
+    """x offsets that re-nest activity rows printed at a category's indent.
 
     Highways house style prints an un-bulleted 'กิจกรรม…' row at the very indent of
-    the 'N.' / 'N.N…' category rows around it, so x0 alone makes them siblings:
+    the 'N.' / 'N.N…' / 'N)' category rows around it, so x0 alone makes them
+    siblings:
       - category-first: the nearest preceding item at the same-or-lower x is a
         category at the SAME x -> the activity is its child (+0.5); a following
         activity at that x after such a child inherits the shift (its sibling);
       - activity-first: otherwise, if the next item at the same-or-lower x is a
-        category at the same x -> the activity is the parent of those (-0.5).
+        category at the same x -> the activity is the parent of those (-0.5);
+      - an activity printed deeper, inside the items of such a nested activity
+        (at the '(N)' indent), is moved up beside it: a กิจกรรม is never the
+        child of another กิจกรรม.
     Neighbours are looked up within the activity's header segment. Returns
     {entry index: dx}; empty when no activity row is printed this way."""
     eps = 0.005
     shifts = {}
+    nested = set()  # activities moved under their category (category-first)
 
     def neighbour(i, step):
         j = i + step
@@ -573,9 +578,23 @@ def _activity_x_shifts(entries, xs):
             j += step
         return None
 
+    def enclosing(i):
+        # nearest preceding item strictly shallower than this one (x0 parent)
+        for j in range(i - 1, -1, -1):
+            e = entries[j]
+            if e.itemtype in _HEADER_TYPES:
+                return None
+            if e.itemtype == 'item' and xs[j] < xs[i] - eps:
+                return j
+        return None
+
     def same_x_category(i, j):
         return (j is not None and abs(xs[j] - xs[i]) < eps
                 and _bullet_key(entries[j])[0] in _CATEGORY_FAMILIES)
+
+    def nest_beside(i, a):
+        shifts[i] = xs[a] + shifts[a] - xs[i]
+        nested.add(i)
 
     for i, e in enumerate(entries):
         if not _is_activity_row(e):
@@ -583,10 +602,14 @@ def _activity_x_shifts(entries, xs):
         prev = neighbour(i, -1)
         if prev is not None and abs(xs[prev] - xs[i]) < eps:
             if _is_activity_row(entries[prev]):
-                if shifts.get(prev, 0) > 0:
-                    shifts[i] = shifts[prev]
+                if prev in nested:
+                    nest_beside(i, prev)
             elif same_x_category(i, prev):
                 shifts[i] = +0.5
+                nested.add(i)
+            elif enclosing(i) in nested:
+                # printed at the indent of a nested activity's own items
+                nest_beside(i, enclosing(i))
         elif same_x_category(i, neighbour(i, +1)):
             shifts[i] = -0.5
     return shifts
