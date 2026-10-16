@@ -57,3 +57,19 @@ def test_zero_outside_the_total_cell_is_not_a_word(tmp_path):
         'A': '1.2 เงินอุดหนุนเฉพาะกิจ', 'D': 0, 'E': 11048000, 'F': 'บาท',
     }})
     assert texts(row(doc, 50)) == ['1.2 เงินอุดหนุนเฉพาะกิจ', '11,048,000', 'บาท']
+
+
+def test_hidden_rows_are_not_read(tmp_path):
+    # เทศบาลเมืองท่าช้าง Sheet1: the local-government export keeps a stale
+    # structured row hidden (r52) beside the hand-edited visible items (r53-54).
+    # The printed document does not show r52, so it must not become an item.
+    doc = make_xlsx(tmp_path, {
+        51: {'A': '1) ค่าครุภัณฑ์', 'E': 8200000, 'F': 'บาท'},
+        52: {'A': '(1)  เงินอุดหนุนค่าครุภัณฑ์การจัดบริการสาธารณะด้านสังคมอื่นๆ',
+             'E': 8200000, 'F': 'บาท'},
+        53: {'A': '(1) รถยนต์บรรทุกติดตั้งเครนไฮโดรลิคพร้อมกระเช้า', 'E': 5500000, 'F': 'บาท'},
+        54: {'A': '(2) ติดตั้งกล้องโทรทัศน์วงจรปิดในเขตเทศบาลเมือง', 'E': 2700000, 'F': 'บาท'},
+    }, hidden_rows=[52])
+    assert texts(row(doc, 52)) == []
+    assert texts(row(doc, 53)) == [
+        '(1) รถยนต์บรรทุกติดตั้งเครนไฮโดรลิคพร้อมกระเช้า', '5,500,000', 'บาท']

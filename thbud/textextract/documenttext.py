@@ -327,7 +327,14 @@ class XLSXDocumentText:
             for row in ws.iter_rows():
                 words = []
                 row_cumulative_indent = 0
-                for cell in _word_cells(row, hidden_columns):
+                # hidden rows are not printed, so they are not data: some
+                # exports keep stale rows hidden beside the edited visible ones
+                row_dimension = ws.row_dimensions.get(row[0].row)
+                if row_dimension is not None and row_dimension.hidden:
+                    cells = []
+                else:
+                    cells = _word_cells(row, hidden_columns)
+                for cell in cells:
                     row_cumulative_indent += cell.alignment.indent
                     words.append(WordText(
                         x0=cell.column + row_cumulative_indent,
