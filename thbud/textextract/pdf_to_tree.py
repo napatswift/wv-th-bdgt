@@ -125,7 +125,31 @@ def get_amount_from_lines(lines) -> float:
                 value = _parse_amount_token(words[i - 1])
                 if value is not None:
                     return value
+    bare = _bare_total(lines[0]) if lines else None
+    if bare is not None:
+        return bare
     return get_amount_from_string(' '.join(str(line) for line in lines))
+
+
+def _bare_total(line: 'LineText'):
+    """The total of a bulleted row whose 'บาท' cell is missing, else None.
+
+    Some sheets leave the 'บาท' cell empty on a row that still prints its total
+    ('3.3) ค่าก่อสร้างอื่นๆ | 1,968,000'). Such a row ends in a bare amount cell;
+    when the sheet has several amount columns the last one is the total column.
+    Only a bulleted row qualifies, so a wrapped description that happens to end
+    in a number ('จำนวน | 52') never counts as a total; and only outside the
+    budget-plan tables, whose rows carry several unrelated numeric columns.
+    """
+    if line.page is not None and getattr(line.page, 'contains_table', False):
+        return None
+    words = [w.text for w in line.words]
+    tokens = str(line).split()
+    if len(words) < 2 or not tokens or not get_patern_of_bullet(tokens[0])[1]:
+        return None
+    if any(_is_baht_marker(w) for w in words):
+        return None
+    return _parse_amount_token(words[-1])
 
 
 def _line_bears_total_column(line: 'LineText') -> bool:
@@ -141,11 +165,16 @@ def _line_bears_total_column(line: 'LineText') -> bool:
 
     An embedded per-unit price ('ๆ ละ 6,500 บาท') stays inside one text cell, so it
     is never a standalone marker word and does not trigger a close.
+
+    A bulleted row whose 'บาท' cell is missing but which ends in a bare amount
+    cell also bears its total (see _bare_total).
     """
     tokens = str(line).split()
     if tokens and tokens[-1].replace('-', '').replace('*', '') == 'บาท':
         return True
-    return any(_is_baht_marker(w.text) for w in line.words)
+    if any(_is_baht_marker(w.text) for w in line.words):
+        return True
+    return _bare_total(line) is not None
 
 
 def get_year_from_string(text: str) -> Tuple[int, int]:
