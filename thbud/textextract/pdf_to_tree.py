@@ -24,9 +24,13 @@ class LineWrapper:
 
 
 class LineItem:
-    def __init__(self, itemtype: str, lines: List['LineText']):
+    def __init__(self, itemtype: str, lines: List['LineText'],
+                 has_total: bool = True):
         self.itemtype = itemtype
         self.lines = lines
+        # False when the entry ended without any row bearing its total column
+        # (e.g. a header closed by the next bulleted row): its amount is unknown
+        self.has_total = has_total
         self.page_index = lines[0].page.page_index
         self.level = None
 
@@ -41,7 +45,10 @@ class LineItem:
 
     @property
     def x0(self):
-        return min(line.x0 for line in self.lines)
+        # the first row (the bullet row) sets the entry's indentation; a
+        # continuation row typed into column A with leading spaces must not
+        # out-dent the whole entry
+        return self.lines[0].x0
 
     @property
     def document(self):
@@ -122,7 +129,31 @@ def get_amount_from_lines(lines) -> float:
                 value = _parse_amount_token(words[i - 1])
                 if value is not None:
                     return value
+    bare = _bare_total(lines[0]) if lines else None
+    if bare is not None:
+        return bare
     return get_amount_from_string(' '.join(str(line) for line in lines))
+
+
+def _bare_total(line: 'LineText'):
+    """The total of a bulleted row whose 'บาท' cell is missing, else None.
+
+    Some sheets leave the 'บาท' cell empty on a row that still prints its total
+    ('3.3) ค่าก่อสร้างอื่นๆ | 1,968,000'). Such a row ends in a bare amount cell;
+    when the sheet has several amount columns the last one is the total column.
+    Only a bulleted row qualifies, so a wrapped description that happens to end
+    in a number ('จำนวน | 52') never counts as a total; and only outside the
+    budget-plan tables, whose rows carry several unrelated numeric columns.
+    """
+    if line.page is not None and getattr(line.page, 'contains_table', False):
+        return None
+    words = [w.text for w in line.words]
+    tokens = _leading_tokens(str(line))
+    if len(words) < 2 or not tokens or not get_patern_of_bullet(tokens[0])[1]:
+        return None
+    if any(is_baht_marker(w) for w in words):
+        return None
+    return _parse_amount_token(words[-1])
 
 
 def _line_bears_total_column(line: 'LineText') -> bool:
@@ -138,11 +169,23 @@ def _line_bears_total_column(line: 'LineText') -> bool:
 
     An embedded per-unit price ('ๆ ละ 6,500 บาท') stays inside one text cell, so it
     is never a standalone marker word and does not trigger a close.
+
+    A bulleted row whose 'บาท' cell is missing but which ends in a bare amount
+    cell also bears its total (see _bare_total).
     """
     tokens = str(line).split()
     if tokens and tokens[-1].replace('-', '').replace('*', '') == 'บาท':
         return True
-    return any(is_baht_marker(w.text) for w in line.words)
+    if any(is_baht_marker(w.text) for w in line.words):
+        return True
+    return _bare_total(line) is not None
+
+
+def _entry_amount(bud_item: 'LineItem'):
+    """Amount of an entry, or None when it never showed a total column."""
+    if not bud_item.has_total:
+        return None
+    return get_amount_from_lines(bud_item.lines)
 
 
 def get_year_from_string(text: str) -> Tuple[int, int]:
@@ -169,7 +212,9 @@ def get_patern_of_bullet(String):
             (r'\(\d*(\.?\d*)*\)$', 50),
             (r'[1-9][0-9]*(\.[1-9][0-9]*)+$', 2),
             (r'[1-9][0-9]*\.$', 1),
-            (r'[1-9][0-9]*$', 30)]
+            (r'[1-9][0-9]*$', 30),
+            # '(2' — a parenthesised bullet whose ')' was left out
+            (r'\(\d+(\.\d+)*$', 50)]
 
     for r, l in regx:
         if re.match(r, String):
@@ -177,6 +222,21 @@ def get_patern_of_bullet(String):
                 l = String.count('.') + l
             return r, l
     return '', 0
+
+
+# a bullet glued to its label: '3.งบเงินอุดหนุน', '1)ค่า…', '(1)ค่า…'. The
+# bullet must end in '.' or ')' so a number glued to text ('12เดือน') stays text.
+_GLUED_BULLET = re.compile(r'^(\(\d+(?:\.\d+)*\)|\d+(?:\.\d+)*[.)])(?=[^\d\s.,)])')
+
+
+def _leading_tokens(text: str) -> List[str]:
+    """Whitespace tokens of a row, with a glued leading bullet split off."""
+    tokens = text.split()
+    if tokens:
+        m = _GLUED_BULLET.match(tokens[0])
+        if m:
+            tokens = [m.group(1), tokens[0][m.end(1):]] + tokens[1:]
+    return tokens
 
 
 def is_quantity_string(stringToCheck):
@@ -220,6 +280,31 @@ def is_redundant_line(line_text: List[str]):
     return False
 
 
+_PERSONNEL_HEADERS = (
+    'รายการบุคลากรภาครัฐ',
+    'รายการบ�คลากร�าครั�',
+    'รายการบ�คลากรภาครัฐ',
+    'รายการบ�คลากร�าครัฐ',
+    'รายการบุคลากรภาครั�',
+)
+
+_OFF_BUDGET_MARKERS = ('เงินนอกงบประมาณ', 'เงินน�กงบประมาณ')
+
+
+def _names_project(line: 'LineText') -> bool:
+    """True when any in-cell line of the row's label starts with 'โครงการ'.
+
+    Integrated-plan files stack the owner above the project inside one cell
+    ('กระทรวง…⏎กรม…⏎โครงการX') or print a bare 'โครงการX' with no ' : '; both
+    open a project just like 'โครงการ : X'. Callers apply it to unbulleted rows
+    only, so an item whose description mentions a project stays an item.
+    """
+    if not line.words:
+        return False
+    return any(seg.strip().startswith('โครงการ')
+               for seg in line.words[0].text.split('\n'))
+
+
 def check_proj_outp(target, line_text):
     if line_text[0].replace(':', '') == target:
         return True
@@ -253,7 +338,15 @@ def get_entries(lines: List[LineText]):
         line_text_string = str(line)
 
         # then split by whitespace
-        line_text = line_text_string.split()
+        line_text = _leading_tokens(line_text_string)
+
+        # a unit's personnel block header ('รายการบุคลากรภาครัฐ') starts a new
+        # unit (one per sheet in ministry-overview files): reset the level
+        # stack so its '1. งบบุคลากร' cannot nest under the previous unit
+        if (line_text and line_text[0] in _PERSONNEL_HEADERS and not entry
+                and not line.page.contains_table):
+            entries.append(('reset', [line_id]))
+            continue
 
         # skiping
         if is_redundant_line(line_text):
@@ -283,6 +376,17 @@ def get_entries(lines: List[LineText]):
             logger.debug('get_entries::`{}` is fiscal year'.format(line))
             continue
 
+        if line_text[0] in _OFF_BUDGET_MARKERS and bullet_flag:
+            # An off-budget row is never an item's own total. The open item
+            # printed no on-budget total, i.e. it is funded off-budget only:
+            # drop it rather than book the off-budget amount as its budget.
+            logger.debug('get_entries::`{}` drops off-budget-only item {}'
+                         .format(line, entry))
+            bullet_flag = False
+            proj_outp_flag = False
+            entry = []
+            continue
+
         if is_quantity_string(line_text_string):
             # 'รวม 117 รายการ (รวม 527 หน่วย)'
             if not bullet_flag:
@@ -297,6 +401,15 @@ def get_entries(lines: List[LineText]):
                     and not is_classifier(line_text[1])
                 )
         ):
+            if entry:
+                # the open entry (an item or a header) printed no total of
+                # its own; it ends where the next bulleted row starts, rather
+                # than swallowing that row. Its amount is unknown.
+                entries.append(
+                    ('item' if bullet_flag else proj_outp_flag, entry, False))
+                proj_outp_flag = False
+                entry = []
+
             bullet_flag = True
 
             # DEBUG
@@ -314,6 +427,7 @@ def get_entries(lines: List[LineText]):
             check_proj_outp('โครงการ', line_text)
             or check_proj_outp('�ครงการ', line_text)
             or check_proj_outp('��รงการ', line_text)
+            or (not bullet_flag and _names_project(line))
         ):
             proj_outp_flag = 'PROJECT'
 
@@ -332,8 +446,7 @@ def get_entries(lines: List[LineText]):
                 entry = []
         else:
             if (
-                'เงินนอกงบประมาณ' in line_text
-                    or 'เงินน�กงบประมาณ' in line_text
+                any(m in line_text for m in _OFF_BUDGET_MARKERS)
                     or 'เงินงบประมาณ' in line_text
             ):
                 continue
@@ -353,9 +466,11 @@ def get_entries(lines: List[LineText]):
                 f'👉🏽 {line_text_string}'
             ))
 
-    return [
-        LineItem(t, lines) for t, lines in entries
-    ]
+    return [LineItem(*e) for e in entries]
+
+
+# entry types that start a fresh level stack; 'reset' does so without a node
+_STACK_RESETS = ('budget_plan', 'PROJECT', 'OUTPUT', 'reset')
 
 
 def add_level_to_entries_positions(entries: List[LineItem],):
@@ -388,7 +503,7 @@ def _x0_levels(entries, xs):
             # then it is a budget unit header.
             # In this case, we clear the stack
             # and add a new level to the levels list.
-            if bud_item.itemtype in ['budget_plan', 'PROJECT', 'OUTPUT']:
+            if bud_item.itemtype in _STACK_RESETS:
                 stack_x = []
 
             if bud_item.itemtype == 'budget_plan':
@@ -433,7 +548,7 @@ def _bullet_key(bud_item):
     family: '(N)' > 'N' > 'N)' > 'N.N' > 'N.' groups get_patern_of_bullet's codes;
     comps: the numeric path, e.g. '2.1.1' -> (2, 1, 1), '(3)' -> (3,).
     """
-    toks = str(bud_item).split()
+    toks = _leading_tokens(str(bud_item))
     if not toks:
         return None, None
     tok = toks[0].rstrip(':')
@@ -511,7 +626,7 @@ def _grammar_levels(entries, xs, pinned=frozenset()):
 
     for i, bud_item in enumerate(entries):
         if bud_item.itemtype != 'item':
-            if bud_item.itemtype in ('budget_plan', 'PROJECT', 'OUTPUT'):
+            if bud_item.itemtype in _STACK_RESETS:
                 stack.clear()
             if bud_item.itemtype == 'budget_plan':
                 out[i] = -2
@@ -643,7 +758,11 @@ def _activity_x_shifts(entries, xs):
 
 def _sum_violations(item_idxs, levels, amounts):
     """# of parents (within one header segment, parentage from `levels` by the
-    nearest-smaller rule) whose amount differs from the sum of their children's."""
+    nearest-smaller rule) whose amount differs from the sum of their children's.
+
+    A parent with an unknown amount (None) is weighed at the sum of its
+    children, as the tree's autofix will fill it, so an amount-less header still
+    counts as money when it becomes some other item's child."""
     children = {}
     stack = []  # (idx, level)
     for i in item_idxs:
@@ -652,8 +771,19 @@ def _sum_violations(item_idxs, levels, amounts):
         if stack:
             children.setdefault(stack[-1][0], []).append(i)
         stack.append((i, levels[i]))
+    amounts = dict(amounts)
+    # children follow their parent in document order: descending index visits
+    # every child before its parent
+    for p in sorted(children, reverse=True):
+        if amounts[p] is None:
+            ka = [amounts[k] for k in children[p]]
+            if all(a is not None for a in ka):
+                amounts[p] = sum(ka)
+                children[p] = []  # filled from its children: nothing to check
     bad = 0
     for p, kids in children.items():
+        if not kids:
+            continue
         pa = amounts[p]
         ka = [amounts[k] for k in kids]
         if pa is None or any(a is None for a in ka):
@@ -796,7 +926,7 @@ def _adopt_vetoed_levels(entries, segment, grammar, activity_proposals):
     if wanted == current and not options:
         return
 
-    amounts = {j: get_amount_from_lines(entries[j].lines) for j in segment}
+    amounts = {j: _entry_amount(entries[j]) for j in segment}
 
     def violations(levels):
         return _sum_violations(segment, dict(zip(segment, levels)), amounts)
@@ -849,6 +979,9 @@ def extract_tree_levels(
     }]
 
     for bud_item in bud_items:
+        if bud_item.itemtype == 'reset':
+            continue
+
         if bud_item.itemtype == 'fiscal_year':
             last_node = parent_stack[-1]['node']
             year_start, year_end = get_year_from_string(str(bud_item))
@@ -877,7 +1010,7 @@ def extract_tree_levels(
         node = BudgetItem(
             budget_type=itemtype_mapper[bud_item.itemtype],
             name=str(bud_item).replace('\n', '\t').strip(),
-            amount=get_amount_from_lines(bud_item.lines),
+            amount=_entry_amount(bud_item),
             document=bud_item.document,
             page=bud_item.page_index,
             row_start=bud_item.row_start,

@@ -101,3 +101,46 @@ def test_embedded_per_unit_price_does_not_split():
     ])
     entries = get_entries(page.lines)
     assert len(entries) == 1, _names(entries)
+
+
+def test_bare_amount_without_baht_cell_closes_bulleted_row():
+    # อพท 2569 row 168: the total sits in column E but the 'บาท' cell (F) is
+    # empty. The row is still complete: it must not swallow the next bullet,
+    # and its amount is the bare total, not the child's.
+    page = make_page([
+        ["   3.3) ค่าก่อสร้างอื่นๆ", "1,968,000"],
+        ["(1) ค่าควบคุมงานที่มีราคาต่อหน่วยต่ำกว่า 10 ล้านบาท", "1,200,000", "บาท"],
+        ["(2) ค่าควบคุมงานปรับปรุงท่าเทียบเรือสลักเพชร", "768,000", "บาท"],
+    ])
+    entries = get_entries(page.lines)
+    assert len(entries) == 3, _names(entries)
+    assert str(entries[0]).split()[:2] == ["3.3)", "ค่าก่อสร้างอื่นๆ"]
+    root = extract_tree_levels(entries)
+    header = next(n for n in PreOrderIter(root) if n.name and "3.3)" in n.name)
+    assert header.amount == 1968000.0
+
+
+def test_bare_amount_picks_the_last_column_of_a_two_year_layout():
+    # กสม 2570 row 46: previous-year (C) and current-year (D) totals, no 'บาท'
+    # cell; the current-year column is the one that precedes 'บาท' elsewhere.
+    page = make_page([
+        ["(6) ค่าเช่ารถยนต์ประจำตำแหน่ง", "5,750,900", "4,332,300"],
+        ["2) ค่าครุภัณฑ์", "100", "บาท"],
+    ])
+    entries = get_entries(page.lines)
+    assert len(entries) == 2, _names(entries)
+    root = extract_tree_levels(entries)
+    item = next(n for n in PreOrderIter(root) if n.name and "(6)" in n.name)
+    assert item.amount == 4332300.0
+
+
+def test_unbulleted_row_ending_in_a_number_does_not_close():
+    # a wrapped description whose continuation ends in a bare number is not a
+    # total: only a bulleted row's trailing bare amount closes it
+    page = make_page([
+        ["1) ครุภัณฑ์คอมพิวเตอร์"],
+        ["จำนวน", "52"],
+        ["รวมเป็นเงิน", "143,000", "บาท"],
+    ])
+    entries = get_entries(page.lines)
+    assert len(entries) == 1, _names(entries)
