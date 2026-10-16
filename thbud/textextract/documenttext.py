@@ -1,6 +1,6 @@
 from typing import List, Optional, Callable, Tuple, Union
 import fitz
-from .text import WordText, PageText, LineText
+from .text import WordText, PageText, LineText, is_baht_marker
 from ..tableparser import (
     has_table
 )
@@ -224,6 +224,33 @@ class DocumentText:
         return lines
 
 
+def _is_numeric_zero(cell) -> bool:
+    return (cell.data_type == 'n' and cell.value == 0
+            and not isinstance(cell.value, bool))
+
+
+def _word_cells(row, hidden_columns):
+    """The cells of a worksheet row that become words, left to right.
+
+    A visible cell with a value is a word. A numeric 0 is one only when it is the
+    row's total, i.e. the next word cell is the 'บาท' marker: dropping it made the
+    amount fall back to a requested-budget column beside it, or to a digit in the
+    description ('... สัญญาที่ 2' + 'บาท' -> 2). Zeros elsewhere (an empty
+    requested column, counters) stay out so the row's text is unchanged.
+    """
+    visible = [
+        cell for cell in row
+        if (cell.value or _is_numeric_zero(cell))
+        and not hidden_columns.get(cell.col_idx, False)
+    ]
+    return [
+        cell for i, cell in enumerate(visible)
+        if cell.value or (
+            i + 1 < len(visible) and is_baht_marker(visible[i + 1].value)
+        )
+    ]
+
+
 class XLSXDocumentText:
     def __init__(self, filepath: str) -> None:
         self.filepath = filepath
@@ -247,7 +274,7 @@ class XLSXDocumentText:
         return self.pages[page_index]
 
     def _get_cell_value(self, cell) -> str:
-        if not cell.value:
+        if not cell.value and not _is_numeric_zero(cell):
             return ''
 
         if cell.data_type == 'n':
@@ -300,22 +327,18 @@ class XLSXDocumentText:
             for row in ws.iter_rows():
                 words = []
                 row_cumulative_indent = 0
-                for cell in row:
-                    if (
-                        cell.value
-                        and not hidden_columns.get(cell.col_idx, False)
-                    ):
-                        row_cumulative_indent += cell.alignment.indent
-                        words.append(WordText(
-                            x0=cell.column + row_cumulative_indent,
-                            y0=cell.row,
-                            x1=cell.column + 1 + row_cumulative_indent,
-                            y1=cell.row,
-                            text=self._get_cell_value(cell)
-                        ))
+                for cell in _word_cells(row, hidden_columns):
+                    row_cumulative_indent += cell.alignment.indent
+                    words.append(WordText(
+                        x0=cell.column + row_cumulative_indent,
+                        y0=cell.row,
+                        x1=cell.column + 1 + row_cumulative_indent,
+                        y1=cell.row,
+                        text=self._get_cell_value(cell)
+                    ))
 
                 line = LineText(words, page_index=sheet_index,
-                                line_index=cell.row)
+                                line_index=row[0].row)
                 lines.append(line)
             self.sheet_name_to_index[sheet] = sheet_index
             page = PageText(lines, sheet_index, 1, 1, False, self)
