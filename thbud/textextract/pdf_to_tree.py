@@ -148,7 +148,7 @@ def _bare_total(line: 'LineText'):
     if line.page is not None and getattr(line.page, 'contains_table', False):
         return None
     words = [w.text for w in line.words]
-    tokens = str(line).split()
+    tokens = _leading_tokens(str(line))
     if len(words) < 2 or not tokens or not get_patern_of_bullet(tokens[0])[1]:
         return None
     if any(_is_baht_marker(w) for w in words):
@@ -212,7 +212,9 @@ def get_patern_of_bullet(String):
             (r'\(\d*(\.?\d*)*\)$', 50),
             (r'[1-9][0-9]*(\.[1-9][0-9]*)+$', 2),
             (r'[1-9][0-9]*\.$', 1),
-            (r'[1-9][0-9]*$', 30)]
+            (r'[1-9][0-9]*$', 30),
+            # '(2' — a parenthesised bullet whose ')' was left out
+            (r'\(\d+(\.\d+)*$', 50)]
 
     for r, l in regx:
         if re.match(r, String):
@@ -220,6 +222,21 @@ def get_patern_of_bullet(String):
                 l = String.count('.') + l
             return r, l
     return '', 0
+
+
+# a bullet glued to its label: '3.งบเงินอุดหนุน', '1)ค่า…', '(1)ค่า…'. The
+# bullet must end in '.' or ')' so a number glued to text ('12เดือน') stays text.
+_GLUED_BULLET = re.compile(r'^(\(\d+(?:\.\d+)*\)|\d+(?:\.\d+)*[.)])(?=[^\d\s.,)])')
+
+
+def _leading_tokens(text: str) -> List[str]:
+    """Whitespace tokens of a row, with a glued leading bullet split off."""
+    tokens = text.split()
+    if tokens:
+        m = _GLUED_BULLET.match(tokens[0])
+        if m:
+            tokens = [m.group(1), tokens[0][m.end(1):]] + tokens[1:]
+    return tokens
 
 
 def is_quantity_string(stringToCheck):
@@ -311,7 +328,7 @@ def get_entries(lines: List[LineText]):
         line_text_string = str(line)
 
         # then split by whitespace
-        line_text = line_text_string.split()
+        line_text = _leading_tokens(line_text_string)
 
         # a unit's personnel block header ('รายการบุคลากรภาครัฐ') starts a new
         # unit (one per sheet in ministry-overview files): reset the level
@@ -512,7 +529,7 @@ def _bullet_key(bud_item):
     family: '(N)' > 'N' > 'N)' > 'N.N' > 'N.' groups get_patern_of_bullet's codes;
     comps: the numeric path, e.g. '2.1.1' -> (2, 1, 1), '(3)' -> (3,).
     """
-    toks = str(bud_item).split()
+    toks = _leading_tokens(str(bud_item))
     if not toks:
         return None, None
     tok = toks[0].rstrip(':')
