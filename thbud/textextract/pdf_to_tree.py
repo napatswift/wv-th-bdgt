@@ -252,6 +252,9 @@ def is_redundant_line(line_text: List[str]):
     return False
 
 
+_OFF_BUDGET_MARKERS = ('เงินนอกงบประมาณ', 'เงินน�กงบประมาณ')
+
+
 def check_proj_outp(target, line_text):
     if line_text[0].replace(':', '') == target:
         return True
@@ -305,6 +308,17 @@ def get_entries(lines: List[LineText]):
             logger.debug('get_entries::`{}` is fiscal year'.format(line))
             continue
 
+        if line_text[0] in _OFF_BUDGET_MARKERS and bullet_flag:
+            # An off-budget row is never an item's own total. The open item
+            # printed no on-budget total, i.e. it is funded off-budget only:
+            # drop it rather than book the off-budget amount as its budget.
+            logger.debug('get_entries::`{}` drops off-budget-only item {}'
+                         .format(line, entry))
+            bullet_flag = False
+            proj_outp_flag = False
+            entry = []
+            continue
+
         if is_quantity_string(line_text_string):
             # 'รวม 117 รายการ (รวม 527 หน่วย)'
             if not bullet_flag:
@@ -354,8 +368,7 @@ def get_entries(lines: List[LineText]):
                 entry = []
         else:
             if (
-                'เงินนอกงบประมาณ' in line_text
-                    or 'เงินน�กงบประมาณ' in line_text
+                any(m in line_text for m in _OFF_BUDGET_MARKERS)
                     or 'เงินงบประมาณ' in line_text
             ):
                 continue
