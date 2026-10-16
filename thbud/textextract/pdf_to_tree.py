@@ -22,9 +22,13 @@ class LineWrapper:
 
 
 class LineItem:
-    def __init__(self, itemtype: str, lines: List['LineText']):
+    def __init__(self, itemtype: str, lines: List['LineText'],
+                 has_total: bool = True):
         self.itemtype = itemtype
         self.lines = lines
+        # False when the entry ended without any row bearing its total column
+        # (e.g. a header closed by the next bulleted row): its amount is unknown
+        self.has_total = has_total
         self.page_index = lines[0].page.page_index
         self.level = None
 
@@ -177,6 +181,13 @@ def _line_bears_total_column(line: 'LineText') -> bool:
     return _bare_total(line) is not None
 
 
+def _entry_amount(bud_item: 'LineItem'):
+    """Amount of an entry, or None when it never showed a total column."""
+    if not bud_item.has_total:
+        return None
+    return get_amount_from_lines(bud_item.lines)
+
+
 def get_year_from_string(text: str) -> Tuple[int, int]:
     # ปี 2563 ตั�งงบประมาณ 616,834,700 บาท -> 2563, 2563
     # ปี 2563-2564 ตั�งงบประมาณ 616,834,700 บาท -> 2563, 2564
@@ -261,6 +272,20 @@ _PERSONNEL_HEADERS = (
 )
 
 _OFF_BUDGET_MARKERS = ('เงินนอกงบประมาณ', 'เงินน�กงบประมาณ')
+
+
+def _names_project(line: 'LineText') -> bool:
+    """True when any in-cell line of the row's label starts with 'โครงการ'.
+
+    Integrated-plan files stack the owner above the project inside one cell
+    ('กระทรวง…⏎กรม…⏎โครงการX') or print a bare 'โครงการX' with no ' : '; both
+    open a project just like 'โครงการ : X'. Callers apply it to unbulleted rows
+    only, so an item whose description mentions a project stays an item.
+    """
+    if not line.words:
+        return False
+    return any(seg.strip().startswith('โครงการ')
+               for seg in line.words[0].text.split('\n'))
 
 
 def check_proj_outp(target, line_text):
@@ -349,6 +374,13 @@ def get_entries(lines: List[LineText]):
                     and not is_classifier(line_text[1])
                 )
         ):
+            if proj_outp_flag == 'PROJECT' and not bullet_flag and entry:
+                # a project header printed without a total of its own ends
+                # where its first bulleted row starts; its amount is unknown
+                entries.append(('PROJECT', entry, False))
+                proj_outp_flag = False
+                entry = []
+
             bullet_flag = True
 
             # DEBUG
@@ -366,6 +398,7 @@ def get_entries(lines: List[LineText]):
             check_proj_outp('โครงการ', line_text)
             or check_proj_outp('�ครงการ', line_text)
             or check_proj_outp('��รงการ', line_text)
+            or (not bullet_flag and _names_project(line))
         ):
             proj_outp_flag = 'PROJECT'
 
@@ -395,9 +428,7 @@ def get_entries(lines: List[LineText]):
                 f'👉🏽 {line_text_string}'
             ))
 
-    return [
-        LineItem(t, lines) for t, lines in entries
-    ]
+    return [LineItem(*e) for e in entries]
 
 
 # entry types that start a fresh level stack; 'reset' does so without a node
@@ -631,8 +662,7 @@ def refine_levels_with_bullet_grammar(entries: List[LineItem]):
             current = [entries[j].level for j in segment]
             wanted = [proposed[j] for j in segment]
             if wanted != current:
-                amounts = {j: get_amount_from_lines(entries[j].lines)
-                           for j in segment}
+                amounts = {j: _entry_amount(entries[j]) for j in segment}
                 v_current = _sum_violations(segment, dict(zip(segment, current)),
                                             amounts)
                 v_wanted = _sum_violations(segment, dict(zip(segment, wanted)),
@@ -707,7 +737,7 @@ def extract_tree_levels(
         node = BudgetItem(
             budget_type=itemtype_mapper[bud_item.itemtype],
             name=str(bud_item).replace('\n', '\t').strip(),
-            amount=get_amount_from_lines(bud_item.lines),
+            amount=_entry_amount(bud_item),
             document=bud_item.document,
             page=bud_item.page_index,
             row_start=bud_item.row_start,
