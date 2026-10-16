@@ -374,10 +374,12 @@ def get_entries(lines: List[LineText]):
                     and not is_classifier(line_text[1])
                 )
         ):
-            if proj_outp_flag == 'PROJECT' and not bullet_flag and entry:
-                # a project header printed without a total of its own ends
-                # where its first bulleted row starts; its amount is unknown
-                entries.append(('PROJECT', entry, False))
+            if entry:
+                # the open entry (an item or a header) printed no total of
+                # its own; it ends where the next bulleted row starts, rather
+                # than swallowing that row. Its amount is unknown.
+                entries.append(
+                    ('item' if bullet_flag else proj_outp_flag, entry, False))
                 proj_outp_flag = False
                 entry = []
 
@@ -618,7 +620,11 @@ def _grammar_levels(entries, xs):
 
 def _sum_violations(item_idxs, levels, amounts):
     """# of parents (within one header segment, parentage from `levels` by the
-    nearest-smaller rule) whose amount differs from the sum of their children's."""
+    nearest-smaller rule) whose amount differs from the sum of their children's.
+
+    A parent with an unknown amount (None) is weighed at the sum of its
+    children, as the tree's autofix will fill it, so an amount-less header still
+    counts as money when it becomes some other item's child."""
     children = {}
     stack = []  # (idx, level)
     for i in item_idxs:
@@ -627,8 +633,19 @@ def _sum_violations(item_idxs, levels, amounts):
         if stack:
             children.setdefault(stack[-1][0], []).append(i)
         stack.append((i, levels[i]))
+    amounts = dict(amounts)
+    # children follow their parent in document order: descending index visits
+    # every child before its parent
+    for p in sorted(children, reverse=True):
+        if amounts[p] is None:
+            ka = [amounts[k] for k in children[p]]
+            if all(a is not None for a in ka):
+                amounts[p] = sum(ka)
+                children[p] = []  # filled from its children: nothing to check
     bad = 0
     for p, kids in children.items():
+        if not kids:
+            continue
         pa = amounts[p]
         ka = [amounts[k] for k in kids]
         if pa is None or any(a is None for a in ka):
