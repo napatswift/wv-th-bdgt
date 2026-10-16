@@ -1,6 +1,7 @@
 from typing import List, Tuple
 
 from ..textextract import DocumentText, PageText, LineText
+from .text import is_baht_marker
 from ..model import BudgetItem, FiscalYearBudget
 import re
 import logging
@@ -100,11 +101,6 @@ def _parse_amount_token(text: str):
     return None
 
 
-def _is_baht_marker(text: str) -> bool:
-    """True for the 'บาท' total-column cell, allowing trailing markers ('บาท *')."""
-    return text.replace('*', '').replace('-', '').strip() == 'บาท'
-
-
 def get_amount_from_lines(lines) -> float:
     """Amount of a budget item, read from its total *column*.
 
@@ -121,7 +117,7 @@ def get_amount_from_lines(lines) -> float:
     for line in lines:
         words = [w.text for w in line.words]
         for i in range(1, len(words)):
-            if _is_baht_marker(words[i]):
+            if is_baht_marker(words[i]):
                 value = _parse_amount_token(words[i - 1])
                 if value is not None:
                     return value
@@ -145,7 +141,7 @@ def _line_bears_total_column(line: 'LineText') -> bool:
     tokens = str(line).split()
     if tokens and tokens[-1].replace('-', '').replace('*', '') == 'บาท':
         return True
-    return any(_is_baht_marker(w.text) for w in line.words)
+    return any(is_baht_marker(w.text) for w in line.words)
 
 
 def get_year_from_string(text: str) -> Tuple[int, int]:

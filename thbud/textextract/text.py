@@ -6,6 +6,17 @@ import logging
 logger = logging.getLogger(__name__)
 
 
+_BAHT_MARKER_NOISE = re.compile(r'[\s.*\-]')
+
+
+def is_baht_marker(text) -> bool:
+    """True for the standalone 'บาท' cell that follows a row's total column.
+
+    Allows trailing markers ('บาท *') and padding noise: some municipal exports
+    write the cell as '.\\n\\n\\nบาท'."""
+    return isinstance(text, str) and _BAHT_MARKER_NOISE.sub('', text) == 'บาท'
+
+
 def mean(numbers: List[float]) -> float:
     return sum(numbers) / len(numbers)
 
