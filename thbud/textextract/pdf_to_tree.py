@@ -459,7 +459,10 @@ def _grammar_levels(entries, xs):
         components and a smaller last component (strict +1 continuation preferred,
         x0-nearest tiebreak for numbering gaps) -> becomes its sibling
       - parent anchor: a stack entry whose components equal the item's components
-        minus the last one ('2.1.1' under '2.1') -> becomes its child
+        minus the last one ('2.1.1' under '2.1') -> becomes its child, used only
+        when there is no sibling anchor: a components-parent deeper than a sibling
+        anchor is a restarted or other-family list ('(1)' inside '1.1', '(1)' inside
+        '(1.1)'), never the parent of the run's continuation
       - a fresh '...1' with no anchor starts a new sub-list under the current top
       - otherwise fall back to the x0 rule
     Un-bulleted items use the x0 rule; headers reset the stack (as in
@@ -506,7 +509,7 @@ def _grammar_levels(entries, xs):
                     sib_idx = plus1[0]
                 else:
                     sib_idx = min(sib_cands, key=lambda d: abs(stack[d][2] - lsx))
-            if sib_idx is not None and (par_idx is None or par_idx < sib_idx):
+            if sib_idx is not None:
                 del stack[sib_idx:]
             elif par_idx is not None:
                 del stack[par_idx + 1:]

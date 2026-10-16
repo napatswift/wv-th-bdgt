@@ -142,3 +142,61 @@ def test_unbulleted_activity_rows_keep_indentation_scoping():
     assert a1.parent is a2.parent
     assert node(root, "งบดำเนินงาน").parent is a1
     assert node(root, "งบลงทุน").parent is a2
+
+
+def test_continuation_beats_a_deeper_components_parent():
+    # อย. pattern: '1.2' must continue the 1.1 run, not nest under the deeper '(1)'
+    # just because (1,) == (1, 2)[:-1]. The noisy x0 of '(2)' under 2.1 gives the
+    # grammar a reconciliation win elsewhere in the segment, so the money veto
+    # cannot be relied on to block the misnesting.
+    root = tree_of([
+        (4, ["1. งบบุคลากร", "100", "บาท"]),
+        (5, ["1.1 เงินเดือนและค่าจ้างประจำ", "60", "บาท"]),
+        (7, ["(1) อัตราเดิม", "60", "บาท"]),
+        (5, ["1.2 ค่าตอบแทนพนักงานราชการ", "40", "บาท"]),
+        (7, ["(1) ค่าตอบแทนพนักงานราชการ", "40", "บาท"]),
+        (4, ["2. งบดำเนินงาน", "30", "บาท"]),
+        (5, ["2.1 ค่าตอบแทน ใช้สอยและวัสดุ", "30", "บาท"]),
+        (7, ["(1) ค่าเช่าบ้าน", "10", "บาท"]),
+        (4, ["(2) เงินเพิ่มพิเศษ", "15", "บาท"]),
+        (7, ["(3) เงินสมทบกองทุน", "5", "บาท"]),
+    ])
+    k12 = node(root, "1.2 ค่าตอบแทนพนักงานราชการ")
+    assert k12.parent is node(root, "งบบุคลากร")
+    k21 = node(root, "ค่าตอบแทน ใช้สอยและวัสดุ")
+    assert node(root, "เงินเพิ่มพิเศษ").parent is k21
+    assert node(root, "เงินสมทบกองทุน").parent is k21
+
+
+def test_continuation_beats_a_restarted_list_nested_in_the_sibling():
+    # ตราด pattern: under '(1.1)' the projects restart at '(1)'; that '(1)' has
+    # comps (1,) == (1, 2)[:-1], but it sits INSIDE the '(1.1)' run, so '(1.2)'
+    # continues the run as its sibling rather than nesting under the project.
+    root = tree_of([
+        (0, ["2) ค่าที่ดิน/สิ่งก่อสร้าง", "100", "บาท"]),
+        (2, ["(1) ค่าก่อสร้างอื่นๆ", "100", "บาท"]),
+        (4, ["(1.1) เงินอุดหนุนด้านการศึกษา", "60", "บาท"]),
+        (2, ["(1) พัฒนาโรงเรียน", "60", "บาท"]),
+        (4, ["(1.2) เงินอุดหนุนด้านโครงสร้างพื้นฐาน", "40", "บาท"]),
+        (2, ["(1) ปรับปรุงระบบไฟฟ้า", "40", "บาท"]),
+    ])
+    k11 = node(root, "เงินอุดหนุนด้านการศึกษา")
+    k12 = node(root, "เงินอุดหนุนด้านโครงสร้างพื้นฐาน")
+    assert k12.parent is k11.parent is node(root, "ค่าก่อสร้างอื่นๆ")
+    assert node(root, "พัฒนาโรงเรียน").parent is k11
+    assert node(root, "ปรับปรุงระบบไฟฟ้า").parent is k12
+
+
+def test_mis_bulleted_child_still_anchors_on_a_cross_family_parent():
+    # ศูนย์คุณธรรม pattern: the sheet writes '1.1' where '1.1)' is meant, under
+    # '1) ค่าใช้จ่ายลงทุน'. With no '1.1' run to continue (the earlier '1.1' has the
+    # same number), the nearest components-parent '1)' is the right anchor even
+    # though it is another bullet family.
+    root = tree_of([
+        (0, ["1. งบเงินอุดหนุน", "100", "บาท"]),
+        (1, ["1.1 เงินอุดหนุนทั่วไป", "100", "บาท"]),
+        (2, ["1) ค่าใช้จ่ายลงทุน", "100", "บาท"]),
+        (2, ["1.1 ค่าครุภัณฑ์", "100", "บาท"]),
+        (4, ["(1) การพัฒนาระบบศูนย์กลางข้อมูล", "100", "บาท"]),
+    ])
+    assert node(root, "ค่าครุภัณฑ์").parent is node(root, "ค่าใช้จ่ายลงทุน")
