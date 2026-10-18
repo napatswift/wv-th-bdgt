@@ -1,7 +1,7 @@
 from typing import List, Optional, Callable, Tuple, Union
 import fitz
 from .text import WordText, PageText, LineText, is_baht_marker
-from .thaifont import compose_sara_am, drop_replacement_actualtext, repair_dillenia
+from .thaifont import STARTS_WITH_MARK, drop_redundant_actualtext, normalize_thai, repair_dillenia
 from ..tableparser import (
     has_table
 )
@@ -120,13 +120,16 @@ class DocumentText:
             self,
             page: fitz.Page
     ) -> List[Tuple[float, float, float, float, str]]:
-        word_tuples = page.get_text_words()
         words = []
-        for word in word_tuples:
-            x0, y0, x1, y1, text = word[:5]
-            words.append((x0, y0, x1, y1, compose_sara_am(text)))
-
-        return words
+        last_line = None
+        for x0, y0, x1, y1, text, block, line, _ in page.get_text_words():
+            # a word that begins with a mark was split from the word it belongs to (a space glyph set under it)
+            if words and (block, line) == last_line and STARTS_WITH_MARK.match(text):
+                px0, py0, px1, py1, ptext = words.pop()
+                x0, y0, x1, y1, text = min(px0, x0), min(py0, y0), max(px1, x1), max(py1, y1), ptext + text
+            words.append((x0, y0, x1, y1, text))
+            last_line = (block, line)
+        return [(x0, y0, x1, y1, normalize_thai(text)) for x0, y0, x1, y1, text in words]
 
     def _read_pdf_file(self,) -> List['PageText']:
         try:
@@ -135,8 +138,7 @@ class DocumentText:
             raise FileNotFoundError(
                 'File not found: {}'.format(self.filepath)) from e
 
-        repair_dillenia(doc)
-        drop_replacement_actualtext(doc)
+        drop_redundant_actualtext(doc, repair_dillenia(doc))
         self.doc = doc
 
         for pidx, page in enumerate(doc.pages()):

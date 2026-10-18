@@ -21,18 +21,32 @@ What the reader does instead (`thbud/textextract/thaifont.py`, called by `Docume
   advance reading as spaces. A map that labels the nikhahit ำ keeps it: that producer hides the sara aa beside it.
 - **Microsoft Thai PUA labels** (U+F700–F71A) in any Type0 font's map are replaced by the Thai they stand for
   (HarfBuzz table, §3.1), so BrowalliaNew and AngsanaUPC read too, whatever their glyphs.
-- **`/ActualText` of U+FFFD** in page content is emptied: producers use it to hide the sara aa of sara am (FY2570
-  front matter) and doubled tone marks.
-- **Sara am** is composed (`ํ` + optional tone + `า` → tone + `ำ`) on every word the loader returns.
+- **`/ActualText`** in page content is dropped from every marked-content span whose glyphs were all recognised by
+  outline, so they read as what they draw: FY2568–2570 producers wrap each cluster's text ('ลื่') around its
+  consonant glyph alone and draw its marks after the span (every mark read twice), and hide the sara aa beside a
+  nikhahit with an ActualText of U+FFFD. One of U+FFFD over glyphs not recognised is still emptied. A small content
+  stream lexer (strings, hex, dictionaries, inline images) finds the spans and the font of each glyph.
+- **Typed order is normalised** on every word the loader returns (`normalize_thai`): sara am composed (`ํ` + optional
+  tone + `า` → tone + `ำ`), `เเ` typed for `แ`, a tone or `์` typed before the vowel above/below moved after it. A
+  word that begins with a mark is joined to the word before it on its line (a space glyph overprinted under a tone).
+- **`thaiorth.violations`** names the sequences written Thai cannot contain (WTT 2.0 / TIS 1566 classes): doubled
+  marks, two vowels or tones on a consonant, tone before vowel, marks after `์`, orphan marks, uncomposed sara am,
+  Latin, Latin-1, control characters, U+FFFD and PUA inside Thai. It is how the rounds below were measured.
 - `LineText._join_words` / `WordText.fix_pdf_text` are removed: the split they patched no longer happens.
 
 Measured on 10 volumes (~5,600 pages): PUA 25,320 → 128, Latin-1 tone marks 7,611 → 0, `ํา` 16,778 → 0, mark-led word
 fragments 30,951 → 7 (stray marks in the source). th-budget's `parse_pdf` on 129 real §7 unit ranges: structure and
 every amount identical, 4,426 item names corrected. The second round (glyph table, PUA in any font, map-less fonts) on
 15 volumes changed no word that read cleanly before except one correction, and took defective words in FY2567 เล่มที่
-๗ from 20,701 to 3 (its TOC went from 0 units to 18), FY2551 BrowalliaNew pages from 462 to 0. Not covered: UPCxD
-section headings in FY2570 (ActualText that repeats the marks drawn beside it, ~200 words in 4 volumes), cover fonts,
-image pages (covers only, so far).
+๗ from 20,701 to 3 (its TOC went from 0 units to 18), FY2551 BrowalliaNew pages from 462 to 0.
+
+The third round (FY2568–2570 heading/contents fonts by outline, redundant ActualText dropped, typed order normalised)
+was measured with `thaiorth` on 99 files (all of FY2568–2570 plus samples back to FY2550, ~57,000 pages): violations
+55,191 → 7,592, of which 7,187 are control characters from one font fontTools cannot parse and cover fonts; UPCxD alone 28,908 → 2, doubled marks 17,574 → 4, tone before vowel 526 → 0. Every word that read as valid Thai
+before and changed was a correction (1.57 million words compared by box). th-budget's TOC scan of all 84 FY2568–2570
+volumes: garbled unit names 803 (in 61 volumes scanned in prod) → 0 of 2,056; the เล่มที่ ๑๖ volumes get their §7 pages
+back. Not covered: FY2559 เล่มที่ ๙(๑)'s DilleniaUPC program fontTools cannot parse (6,400 control characters),
+cover fonts, image pages (covers only, so far).
 
 ## Summary (original research, before the wider check)
 
