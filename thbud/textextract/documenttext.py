@@ -1,7 +1,7 @@
 from typing import List, Optional, Callable, Tuple, Union
 import fitz
 from .text import WordText, PageText, LineText, is_baht_marker
-from .thaifont import compose_sara_am, repair_dillenia
+from .thaifont import compose_sara_am, drop_replacement_actualtext, repair_dillenia
 from ..tableparser import (
     has_table
 )
@@ -136,6 +136,7 @@ class DocumentText:
                 'File not found: {}'.format(self.filepath)) from e
 
         repair_dillenia(doc)
+        drop_replacement_actualtext(doc)
         self.doc = doc
 
         for pidx, page in enumerate(doc.pages()):

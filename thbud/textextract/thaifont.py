@@ -129,3 +129,19 @@ def repair_dillenia(doc: fitz.Document) -> None:
             fixed = mapping | labels
             if fixed != mapping:
                 doc.update_stream(cmap_xref, write_cmap(fixed))
+
+
+# Some producers hide a glyph from the text layer by wrapping it in an /ActualText of U+FFFD instead of an empty
+# string: FY2570 draws sara am as a glyph labelled ำ plus a hidden sara aa, and doubled tone marks the same way.
+# MuPDF reads such a span as U+FFFD, so it is made empty.
+_FFFD_ACTUALTEXT = re.compile(rb'/ActualText\s*(?:\(\xfe\xff\xff\xfd\)|<FEFFFFFD>)', re.I)
+
+
+def drop_replacement_actualtext(doc: fitz.Document) -> None:
+    """Empty, in memory, every page's /ActualText that is U+FFFD. Must run before any text is extracted."""
+    for page in doc:
+        for xref in page.get_contents():
+            stream = doc.xref_stream(xref)
+            fixed = _FFFD_ACTUALTEXT.sub(b'/ActualText ()', stream)
+            if fixed != stream:
+                doc.update_stream(xref, fixed)
