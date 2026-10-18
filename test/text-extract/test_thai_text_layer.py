@@ -61,3 +61,12 @@ def test_a_compacted_dillenia_subset_is_read_by_its_glyphs_not_its_codes():
     assert 'งบประมาณรายจ่าย' in text
     assert 'ผลสัมฤทธิ์หรือประโยชน์ที่คาดว่าจะได้รับ' in text
     assert not any(0xF700 <= ord(c) <= 0xF8FF for c in text)
+
+
+def test_a_glyph_whose_actualtext_is_the_replacement_character_adds_no_text():
+    # FY2570 front matter (THSarabunPSK) draws sara am as a glyph labelled ำ plus a sara aa wrapped in
+    # /ActualText (U+FFFD), meant to hide it; read as is, 'ประจำปี' becomes 'ประจำ�ปี'.
+    text = page_text('fy2570-actualtext-fffd.pdf')
+    assert 'ความเชื่อมโยงงบประมาณรายจ่ายประจำปีงบประมาณ' in text
+    assert 'สำนักงานปลัดกระทรวงการคลัง' in text
+    assert '�' not in text
