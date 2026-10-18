@@ -51,19 +51,6 @@ class WordText:
         assert isinstance(self.y1, (float, int))
         assert isinstance(self.text, str)
 
-    def fix_pdf_text(self,) -> str:
-        """
-        Fix text that is not correctly extracted from pdf.
-        """
-        return re.sub(r'^า', 'ำ', self.text)
-
-    def merge_word(self, word: 'WordText', fixed_text: str):
-        self.text += fixed_text
-        self.x0 = min(self.x0, word.x0)
-        self.x1 = max(self.x1, word.x1)
-        self.y0 = min(self.y0, word.y0)
-        self.y1 = max(self.y1, word.y1)
-
     def copy(self) -> 'WordText':
         return WordText(self.x0, self.y0, self.x1, self.y1, self.text)
 
@@ -89,7 +76,7 @@ class WordText:
 class LineText:
     def __init__(self, words: List[WordText], page_index: int, line_index: int, page: 'PageText' = None):
         self.page_number: str = None
-        self.words = self._join_words(words)
+        self.words = words
         self.page_index = page_index
         self.line_index = line_index
         self.doc_id = None
@@ -146,28 +133,6 @@ class LineText:
     def __repr__(self) -> str:
         words = ', '.join([repr(w) for w in self.words])
         return 'LineText([' + words + '])'
-
-    def _join_words(self, words: List[WordText]) -> List[WordText]:
-        """
-        if word starts with า, join it with previous word.
-        """
-        new_words = []
-        for word in words:
-            if (word.text.startswith('า') or
-                    word.text.startswith('ำ') or
-                    word.text.startswith('ํา') or
-                    word.text.startswith('่') or
-                    word.text.startswith('่') or
-                    word.text.startswith('๋') or
-                    word.text.startswith('้')):
-                if len(new_words) == 0:
-                    new_words.append(word)
-                    continue
-                prev_word = new_words[-1]
-                prev_word.merge_word(word, word.fix_pdf_text())
-            else:
-                new_words.append(word)
-        return new_words
 
     def to_dict(self) -> Dict:
         return {

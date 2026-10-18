@@ -1,6 +1,7 @@
 from typing import List, Optional, Callable, Tuple, Union
 import fitz
 from .text import WordText, PageText, LineText, is_baht_marker
+from .thaifont import compose_sara_am, repair_dillenia
 from ..tableparser import (
     has_table
 )
@@ -123,7 +124,7 @@ class DocumentText:
         words = []
         for word in word_tuples:
             x0, y0, x1, y1, text = word[:5]
-            words.append((x0, y0, x1, y1, text))
+            words.append((x0, y0, x1, y1, compose_sara_am(text)))
 
         return words
 
@@ -134,6 +135,7 @@ class DocumentText:
             raise FileNotFoundError(
                 'File not found: {}'.format(self.filepath)) from e
 
+        repair_dillenia(doc)
         self.doc = doc
 
         for pidx, page in enumerate(doc.pages()):
