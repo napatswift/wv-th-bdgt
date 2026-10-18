@@ -27,6 +27,21 @@ def compose_sara_am(text: str) -> str:
     return _SARA_AM.sub('\\1\u0e33', text)
 
 
+# Typists' habits the text keeps: two sara e for sara ae, and a tone mark or thanthakhat typed before the vowel above
+# or below its consonant (Unicode, and written Thai, put the vowel first).
+_TWO_SARA_E = re.compile('\u0e40\u0e40(?=[\u0e01-\u0e2e])')
+_TONE_BEFORE_VOWEL = re.compile('([\u0e48-\u0e4c])([\u0e31\u0e34-\u0e3a])')
+# a mark (vowel above/below, tone, thanthakhat, ...) cannot begin a word
+STARTS_WITH_MARK = re.compile('[\u0e31\u0e34-\u0e3a\u0e47-\u0e4e]')
+
+
+def normalize_thai(text: str) -> str:
+    """Typed Thai in the order written Thai uses: sara am composed, 'เเ' as แ, a tone or ์ after its vowel."""
+    text = _TWO_SARA_E.sub('\u0e41', text)
+    text = _TONE_BEFORE_VOWEL.sub('\\2\\1', text)
+    return compose_sara_am(text)
+
+
 # Microsoft Thai PUA positional forms -> the character each draws, as HarfBuzz's Thai shaper lists them
 # (hb-ot-shaper-thai.cc): shifted-left, shifted-down(-left) and descender-less glyphs of ordinary Thai letters.
 _PUA = {0xF700: '\u0e10', 0xF70F: '\u0e0d',
@@ -135,17 +150,20 @@ def glyph_labels(doc: fitz.Document, xref: int) -> dict[int, str]:
     return spaces | known if known else {}
 
 
-def repair_dillenia(doc: fitz.Document) -> None:
+def repair_dillenia(doc: fitz.Document) -> dict[int, set[int]]:
     """Rewrite in memory the ToUnicode map of every Type0 Identity-H font so each glyph reads as what it draws:
     Microsoft Thai PUA labels become the Thai they stand for, and each glyph of a known outline gets its text, making
-    the map a font has none of. Must run before any text is extracted: MuPDF keeps a font's map once loaded."""
-    done = set()
+    the map a font has none of. Must run before any text is extracted: MuPDF keeps a font's map once loaded.
+    Returns, per font, the codes whose glyphs were recognised by outline."""
+    done, recognised = set(), {}
     for pno in range(len(doc)):
         for xref, _, ftype, _, _, encoding in doc.get_page_fonts(pno):
             if xref in done or ftype != 'Type0' or encoding != 'Identity-H':
                 continue
             done.add(xref)
             labels = glyph_labels(doc, xref)
+            if labels:
+                recognised[xref] = set(labels)
             kind, value = doc.xref_get_key(xref, 'ToUnicode')
             if kind != 'xref':
                 if labels:
@@ -156,25 +174,153 @@ def repair_dillenia(doc: fitz.Document) -> None:
                 continue
             cmap_xref = int(value.split()[0])
             mapping = read_cmap(doc.xref_stream(cmap_xref).decode('latin-1'))
-            mapping_pua = {code: text.translate(_PUA) for code, text in mapping.items()}
-            # a map that labels the nikhahit ำ hides the sara aa drawn beside it (see drop_replacement_actualtext)
-            fixed = mapping_pua | {code: char for code, char in labels.items()
-                                   if not (char == '\u0e4d' and mapping_pua.get(code) == '\u0e33')}
+            fixed = {code: text.translate(_PUA) for code, text in mapping.items()} | labels
             if fixed != mapping:
                 doc.update_stream(cmap_xref, write_cmap(fixed))
+    return recognised
 
 
-# Some producers hide a glyph from the text layer by wrapping it in an /ActualText of U+FFFD instead of an empty
-# string: FY2570 draws sara am as a nikhahit glyph labelled ำ plus a hidden sara aa, and doubled tone marks the same
-# way. MuPDF reads such a span as U+FFFD, so it is made empty.
-_FFFD_ACTUALTEXT = re.compile(rb'/ActualText\s*(?:\(\xfe\xff\xff\xfd\)|<FEFFFFFD>)', re.I)
+_WHITE = b' \t\r\n\x0c\x00'
+_DELIMITERS = b'()<>[]{}/%'
+_ESCAPES = {ord('n'): b'\n', ord('r'): b'\r', ord('t'): b'\t', ord('b'): b'\b', ord('f'): b'\f'}
 
 
-def drop_replacement_actualtext(doc: fitz.Document) -> None:
-    """Empty, in memory, every page's /ActualText that is U+FFFD. Must run before any text is extracted."""
+def _lex(data: bytes):
+    """(kind, start, end) of each token of a content stream: 'str', 'hex', '<<', '>>', '[', ']', 'name', 'word'.
+    Inline image data (BI ... ID <data> EI) is skipped."""
+    i, n = 0, len(data)
+    while i < n:
+        c = data[i]
+        if c in _WHITE:
+            i += 1
+        elif c == 0x25:  # %comment
+            j = data.find(b'\n', i)
+            i = n if j < 0 else j
+        elif c == 0x28:  # (literal string), balanced parentheses, backslash escapes
+            start, depth = i, 0
+            while i < n:
+                if data[i] == 0x5C:
+                    i += 2
+                    continue
+                depth += {0x28: 1, 0x29: -1}.get(data[i], 0)
+                i += 1
+                if depth == 0:
+                    break
+            yield 'str', start, i
+        elif data.startswith(b'<<', i) or data.startswith(b'>>', i):
+            yield data[i:i + 2].decode(), i, i + 2
+            i += 2
+        elif c == 0x3C:  # <hex string>
+            j = data.find(b'>', i)
+            j = n if j < 0 else j + 1
+            yield 'hex', i, j
+            i = j
+        elif c in b'[]{}':
+            yield chr(c), i, i + 1
+            i += 1
+        else:
+            start = i
+            i += 1
+            while i < n and data[i] not in _WHITE and data[i] not in _DELIMITERS:
+                i += 1
+            if data[start:i] == b'ID':  # inline image: its data runs to an EI between white space
+                m = re.compile(rb'\sEI(?=[\s]|$)').search(data, i + 1)
+                i = n if m is None else m.end()
+                continue
+            yield ('name' if c == 0x2F else 'word'), start, i
+
+
+def _string_bytes(token: bytes) -> bytes:
+    if token.startswith(b'<'):
+        return bytes.fromhex(re.sub(rb'[^0-9A-Fa-f]', b'', token[1:-1]).decode().ljust(2, '0'))
+    out, i, body = bytearray(), 0, token[1:-1]
+    while i < len(body):
+        c = body[i]
+        if c != 0x5C:
+            out.append(c)
+            i += 1
+            continue
+        nxt = body[i + 1] if i + 1 < len(body) else None
+        if nxt is not None and 0x30 <= nxt <= 0x37:
+            octal = re.match(rb'[0-7]{1,3}', body[i + 1:]).group()
+            out.append(int(octal, 8) & 0xFF)
+            i += 1 + len(octal)
+        elif nxt in (0x0A, 0x0D):  # line continuation
+            i += 2 + (nxt == 0x0D and body[i + 2:i + 3] == b'\n')
+        else:
+            out += _ESCAPES.get(nxt, bytes([nxt]) if nxt is not None else b'')
+            i += 2
+    return bytes(out)
+
+
+_REPLACEMENT = b'\xfe\xff\xff\xfd'  # U+FFFD as a UTF-16BE text string with its byte order mark
+_OPERAND_WORD = re.compile(rb'[-+.\d]+$|true$|false$|null$')
+
+
+def _actualtext_edits(data: bytes, fonts: dict[bytes, int], recognised: dict[int, set[int]], state: dict):
+    """Byte ranges of `data` to replace: the /ActualText entry of each marked-content span whose glyphs were all
+    recognised by outline is dropped; one of U+FFFD over glyphs that were not is emptied."""
+    edits, operands = [], []
+    stack = state.setdefault('stack', [])
+    for kind, start, end in _lex(data):
+        if kind != 'word' or _OPERAND_WORD.match(data, start, end):
+            operands.append((kind, start, end))
+            continue
+        op = data[start:end]
+        if op == b'Tf' and len(operands) >= 2 and operands[-2][0] == 'name':
+            state['font'] = fonts.get(data[operands[-2][1] + 1:operands[-2][2]])
+        elif op == b'BDC':
+            entry = None
+            for k, (kd, s0, e0) in enumerate(operands):
+                if kd == 'name' and data[s0:e0] == b'/ActualText' and k + 1 < len(operands):
+                    kd2, s1, e1 = operands[k + 1]
+                    if kd2 in ('str', 'hex'):
+                        entry = (s0, e1, _string_bytes(data[s1:e1]))
+            stack.append({'entry': entry, 'glyphs': 0, 'known': True})
+        elif op == b'BMC':
+            stack.append({'entry': None, 'glyphs': 0, 'known': True})
+        elif op == b'EMC' and stack:
+            span = stack.pop()
+            if stack:
+                stack[-1]['glyphs'] += span['glyphs']
+                stack[-1]['known'] &= span['known']
+            if span['entry'] is not None:
+                s0, e1, text = span['entry']
+                if span['glyphs'] and span['known']:
+                    edits.append((s0, e1, b''))
+                elif text in (_REPLACEMENT, _REPLACEMENT[2:]):
+                    edits.append((s0, e1, b'/ActualText ()'))
+        elif op in (b'Tj', b"'", b'"', b'TJ') and stack:
+            strings = [data[s:e] for kd, s, e in operands if kd in ('str', 'hex')]
+            codes = b''.join(_string_bytes(t) for t in strings)
+            known = recognised.get(state.get('font'))
+            n = len(codes) // 2
+            top = stack[-1]
+            top['glyphs'] += n
+            if n and (known is None or any(int.from_bytes(codes[2 * i:2 * i + 2], 'big') not in known
+                                           for i in range(n))):
+                top['known'] = False
+        operands = []
+    return edits
+
+
+def drop_redundant_actualtext(doc: fitz.Document, recognised: dict[int, set[int]]) -> None:
+    """Drop, in memory, the /ActualText of every marked-content span whose glyphs are all recognised by outline, so
+    they read as the glyphs they draw; empty one of U+FFFD over other glyphs. Must run before any text is extracted.
+
+    FY2568-2570 producers wrap each cluster's text ('ลื่') around its consonant glyph alone and draw its marks after
+    the span, so the marks read twice; and hide a glyph (the sara aa beside a nikhahit) with an /ActualText of U+FFFD
+    instead of an empty string, which MuPDF reads as U+FFFD."""
     for page in doc:
+        fonts = {ref.encode(): xref for xref, _, _, _, ref, _ in page.get_fonts()}
+        state = {}
         for xref in page.get_contents():
-            stream = doc.xref_stream(xref)
-            fixed = _FFFD_ACTUALTEXT.sub(b'/ActualText ()', stream)
-            if fixed != stream:
-                doc.update_stream(xref, fixed)
+            data = doc.xref_stream(xref)
+            edits = _actualtext_edits(data, fonts, recognised, state)
+            if not edits:
+                continue
+            out, last = bytearray(), 0
+            for s0, e1, repl in sorted(edits):
+                out += data[last:s0] + repl
+                last = e1
+            doc.update_stream(xref, bytes(out + data[last:]))

@@ -109,3 +109,21 @@ def test_upcxd_contents_glyphs_read_by_outline_not_by_their_cluster_labels():
     assert 'สำนักงบประมาณ' in text
     assert 'เปรียบเทียบงบประมาณรายจ่ายประจำปีงบประมาณ' in text
     assert 'L' not in text and 'P' not in text
+
+
+def test_actualtext_of_recognised_glyphs_does_not_repeat_the_marks_drawn_beside_it():
+    # The same pages wrap each cluster in an /ActualText ('ลื่') around its consonant glyph alone, then draw the
+    # marks outside the span: read as is, every mark of such a cluster appears twice ('เคลื่ื่อน').
+    from thbud.textextract.thaiorth import violations
+    text = page_text('fy2570-upcxd-contents.pdf')
+    assert 'สำนักงานขับเคลื่อนการปฏิรูปประเทศ' in text
+    assert 'ผลสัมฤทธิ์หรือประโยชน์ที่คาดว่าจะได้รับจากการใช้จ่ายงบประมาณ' in text
+    doubled = [rule for rule, _ in violations(text) if rule in ('doubled_mark', 'two_vowels', 'two_tones', 'tone_before_vowel')]
+    assert doubled == []
+
+
+def test_a_tone_mark_set_after_a_space_glyph_stays_on_its_word():
+    # FY2569 เล่มที่ ๑ contents draw a space glyph under the tone mark of 'ที่' (overprinted, no visible gap), which
+    # would split 'ที่ดิน' into 'ที' and '่ดิน': no Thai word starts with a mark.
+    text = page_text('fy2569-space-before-tone.pdf')
+    assert 'สำนักงานคณะกรรมการนโยบายที่ดินแห่งชาติ' in text

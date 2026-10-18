@@ -1214,4 +1214,5 @@ GLYPHS = {
     '25a0dd8a4d2660aa': '\u0e4c',  # UPCxD-Bold
     'da58bb06a4c3f787': '\u0e4c',  # UPCxD-Bold
     '15fc590b565f9bbe': '\u0e4d',  # UPCxD-Bold
+    '5e3119a341847fc2': '\u0e24',  # DilleniaDSEBold
 }
