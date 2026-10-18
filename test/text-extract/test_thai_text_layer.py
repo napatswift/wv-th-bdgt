@@ -100,3 +100,12 @@ def test_thsarabun_embedded_with_no_tounicode_is_read_by_its_glyphs():
     assert 'กระทรวงพลังงาน' in text
     assert 'สำนักงานปลัดกระทรวงพลังงาน' in text
     assert 'ความเชื่อมโยงงบประมาณรายจ่ายประจำปีงบประมาณ พ.ศ. 2567' in text
+
+
+def test_upcxd_contents_glyphs_read_by_outline_not_by_their_cluster_labels():
+    # FY2568-2570 contents pages are set in UPCxD, whose map labels a glyph with the first cluster it was set in
+    # ('จ่' for จ) and leaves positional tone marks unlabelled (read as their raw code, 'L').
+    text = page_text('fy2570-upcxd-contents.pdf')
+    assert 'สำนักงบประมาณ' in text
+    assert 'เปรียบเทียบงบประมาณรายจ่ายประจำปีงบประมาณ' in text
+    assert 'L' not in text and 'P' not in text
