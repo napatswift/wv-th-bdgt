@@ -1,9 +1,9 @@
 """DocumentText reads Thai correctly from budget PDFs whose text layer maps glyphs to the wrong characters.
 
-Each fixture is one page cut from a bb.go.th budget document (เอกสารงบประมาณ ฉบับที่ ๓). Every one is set in
-DilleniaUPC, whose glyph ids mean the same glyph in every year, while the PDF producers label some of those glyphs
-with the wrong Unicode: Microsoft Thai PUA tone marks (FY2550-2552), no label at all (FY2554), and the nikhahit of
-sara am labelled as a space (FY2570)."""
+Each fixture is one page cut from a bb.go.th budget document (เอกสารงบประมาณ ฉบับที่ ๓), most set in DilleniaUPC.
+Their producers label some glyphs with the wrong Unicode: Microsoft Thai PUA tone marks (FY2550-2552, BrowalliaNew in
+FY2551), no label at all (FY2554), the nikhahit of sara am as a space (FY2570), or embed the font with no map at all
+(FY2567, DilleniaUPC and THSarabunPSK)."""
 from thbud.textextract import DocumentText
 
 DATA = 'test/text-extract/data/thai-layer/'
@@ -70,3 +70,33 @@ def test_a_glyph_whose_actualtext_is_the_replacement_character_adds_no_text():
     assert 'ความเชื่อมโยงงบประมาณรายจ่ายประจำปีงบประมาณ' in text
     assert 'สำนักงานปลัดกระทรวงการคลัง' in text
     assert '�' not in text
+
+
+def test_dillenia_embedded_with_no_tounicode_at_all_is_read_by_its_glyphs():
+    # FY2567 เล่มที่ ๗ embeds full DilleniaUPC as Type0 fonts with neither a ToUnicode map nor a cmap table, so
+    # every glyph would read as its raw code ('¦³¤µ¦µ¥nµ¥').
+    text = page_text('fy2567-no-tounicode.pdf')
+    assert 'งบประมาณรายจ่าย' in text
+    assert 'วิสัยทัศน์' in text
+    assert 'ประเทศมีความมั่นคงด้านพลังงาน' in text
+    assert not any(c in text for c in '¦³¤µ')
+
+
+def test_pua_tone_marks_of_any_font_read_as_thai():
+    # FY2551 contents pages are set in BrowalliaNew, whose ToUnicode labels positional tone marks with Microsoft
+    # Thai PUA codes.
+    text = page_text('fy2551-browallia-pua.pdf')
+    assert 'หน้า' in text
+    assert 'ข้อมูลกระทรวง' in text
+    assert 'สิ่งแวดล้อม' in text
+    assert not any(0xF700 <= ord(c) <= 0xF8FF for c in text)
+
+
+def test_thsarabun_embedded_with_no_tounicode_is_read_by_its_glyphs():
+    # The contents pages of FY2567 เล่มที่ ๗ embed THSarabunPSK with no ToUnicode map; its unit names are what the
+    # TOC scan reads.
+    text = page_text('fy2567-sarabun-no-tounicode.pdf')
+    assert 'สารบัญ' in text
+    assert 'กระทรวงพลังงาน' in text
+    assert 'สำนักงานปลัดกระทรวงพลังงาน' in text
+    assert 'ความเชื่อมโยงงบประมาณรายจ่ายประจำปีงบประมาณ พ.ศ. 2567' in text

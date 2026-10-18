@@ -11,20 +11,28 @@ subsets (224 or 362 glyphs) keep one outline per gid.
 
 What the reader does instead (`thbud/textextract/thaifont.py`, called by `DocumentText` right after opening a PDF):
 
-- **Marks are recognised by outline.** In every Type0 Identity-H font, whatever its name, each glyph's raw `glyf`
-  contours are hashed and looked up in `dillenia_marks.py`: 41 DilleniaUPC Thai mark outlines → the character each
-  draws, generated from the full-numbering subsets, with no outline shared by glyphs that read differently. Matching
-  codes are relabelled in the font's ToUnicode map, in memory, before MuPDF reads any text. This covers the
-  full-numbering subsets, the nameless `CIDFont+F1/F2` (same outlines at the same ids) and the compacted subsets
-  (PUA-labelled marks).
+- **Glyphs are recognised by outline.** In every Type0 Identity-H font, whatever its name, each glyph's raw `glyf`
+  contours are hashed and looked up in `glyph_outlines.py`: 420 DilleniaUPC and THSarabunPSK outlines → the text each
+  draws. The 41 DilleniaUPC marks come from the full-numbering subsets; every other outline takes the label that
+  >= 95% of the corpus's ToUnicode maps give it (no outline is labelled two ways, within or across the two families).
+  THSarabunPSK's zero-width nikhahit (maps label it ำ) reads as `ํ`, and two THSarabunPSK-Bold glyphs no mapped font
+  uses were read off the page. A recognised glyph's label replaces the map's, in memory, before MuPDF reads any text;
+  a font with no ToUnicode at all (FY2560 เล่มที่ ๙(๒), FY2567 เล่มที่ ๗) gets one built, outline-less glyphs with an
+  advance reading as spaces. A map that labels the nikhahit ำ keeps it: that producer hides the sara aa beside it.
+- **Microsoft Thai PUA labels** (U+F700–F71A) in any Type0 font's map are replaced by the Thai they stand for
+  (HarfBuzz table, §3.1), so BrowalliaNew and AngsanaUPC read too, whatever their glyphs.
+- **`/ActualText` of U+FFFD** in page content is emptied: producers use it to hide the sara aa of sara am (FY2570
+  front matter) and doubled tone marks.
 - **Sara am** is composed (`ํ` + optional tone + `า` → tone + `ำ`) on every word the loader returns.
 - `LineText._join_words` / `WordText.fix_pdf_text` are removed: the split they patched no longer happens.
 
-Measured on 10 volumes (~5,600 pages): PUA 25,320 → 128 (AngsanaUPC on a few 2550 pages, and cover fonts), Latin-1
-tone marks 7,611 → 0, `ํา` 16,778 → 0, mark-led word fragments 30,951 → 7 (stray marks in the source). th-budget's
-`parse_pdf` on 129 real §7 unit ranges (TOC + footer offset): structure and every amount identical, 4,426 item names
-corrected. Not covered: AngsanaUPC and other UPC fonts (same method, needs their outlines); 7 Bold PUA-era marks never
-seen in the samples (Bold 100, 102, 105, 107, 108, 109, 126); image pages (covers only, so far).
+Measured on 10 volumes (~5,600 pages): PUA 25,320 → 128, Latin-1 tone marks 7,611 → 0, `ํา` 16,778 → 0, mark-led word
+fragments 30,951 → 7 (stray marks in the source). th-budget's `parse_pdf` on 129 real §7 unit ranges: structure and
+every amount identical, 4,426 item names corrected. The second round (glyph table, PUA in any font, map-less fonts) on
+15 volumes changed no word that read cleanly before except one correction, and took defective words in FY2567 เล่มที่
+๗ from 20,701 to 3 (its TOC went from 0 units to 18), FY2551 BrowalliaNew pages from 462 to 0. Not covered: UPCxD
+section headings in FY2570 (ActualText that repeats the marks drawn beside it, ~200 words in 4 volumes), cover fonts,
+image pages (covers only, so far).
 
 ## Summary (original research, before the wider check)
 
