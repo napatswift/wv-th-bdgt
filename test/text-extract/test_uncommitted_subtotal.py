@@ -100,3 +100,29 @@ def test_uncommitted_row_stays_dropped_when_it_does_not_close_the_gap():
         "(1) ค่าก่อสร้างอาคารศาลปกครอง 498,114,900 บาท",
         "(2) ค่าปรับปรุงอาคารสำนักงาน 14,115,200 บาท",
     ]
+
+
+def test_item_less_uncommitted_row_is_the_leaf_of_its_childless_parent():
+    # สำนักงานเลขาธิการวุฒิสภา 2569 shape: no items follow the row, the next
+    # line is a sibling of the parent; the row carries the parent's whole amount.
+    root = tree_of([
+        (2, ["1.1 เงินอุดหนุนทั่วไป", "48,750,600", "บาท"]),
+        (3, ["1) ค่าใช้จ่ายดำเนินงาน", "15,000,000", "บาท"]),
+        (3, ["2) ค่าครุภัณฑ์", "39,950,600", "33,750,600", "บาท"]),
+        (6, ["รายการไม่ผูกพัน", "39,950,600", "33,750,600", "บาท"]),
+        (3, ["3) ค่าที่ดินและสิ่งก่อสร้าง", "0", "บาท"]),
+    ])
+    parent = node(root, "ค่าครุภัณฑ์")
+    uncommitted = node(root, "รายการไม่ผูกพัน")
+    assert uncommitted.parent is parent
+    assert uncommitted.amount == 33_750_600
+    assert node(root, "ค่าที่ดินและสิ่งก่อสร้าง").parent is node(root, "เงินอุดหนุนทั่วไป")
+
+
+def test_item_less_uncommitted_row_stays_dropped_when_it_is_not_the_whole_parent():
+    root = tree_of([
+        (3, ["2) ค่าครุภัณฑ์", "100", "บาท"]),
+        (6, ["รายการไม่ผูกพัน", "60", "บาท"]),
+        (3, ["3) ค่าที่ดินและสิ่งก่อสร้าง", "0", "บาท"]),
+    ])
+    assert not any("ผูกพัน" in n for n in names(root))

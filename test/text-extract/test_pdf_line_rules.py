@@ -181,3 +181,63 @@ def test_successive_activity_rows_under_one_category_stay_siblings_in_pdf_coordi
     assert [(c.name.split()[0], c.amount) for c in category.children] == [
         ("กิจกรรมยกระดับมาตรฐานทาง", 100000000.0), ("กิจกรรมพัฒนาสะพานขนาดกลาง", 60000000.0)]
     assert [len(c.children) for c in category.children] == [2, 1]
+
+
+def test_word_spilled_ahead_of_a_bullet_does_not_hide_the_row():
+    # กรมการแพทย์แผนไทยฯ 2562 p.327: the previous item's '1 คัน' wraps its unit
+    # word onto the next row, printed left of that row's bullet.
+    rows = [
+        _amount_row("2.1.1.1 ครุภัณฑ์ยานพาหนะและขนส่ง", "1,288,000", x0=0.177),
+        _amount_row("(1) รถโดยสาร ขนาด 12 ที่นั่ง 1", "1,288,000", x0=0.165),
+        [("คัน", 0.154, 0.172)] + _amount_row("2.1.1.2 ครุภัณฑ์คอมพิวเตอร์", "2,194,000",
+                                             x0=0.177),
+        _amount_row("(1) ครุภัณฑ์คอมพิวเตอร์ที่มีราคาต่อหน่วยต่ำกว่า 1 ล้านบาท", "2,194,000",
+                    x0=0.165),
+    ]
+    root = extract_tree_levels(get_entries(make_pdf_page(rows).lines))
+    assert [c.name.split()[:2] for c in root.children] == [
+        ["2.1.1.1", "ครุภัณฑ์ยานพาหนะและขนส่ง"], ["2.1.1.2", "ครุภัณฑ์คอมพิวเตอร์"]]
+    assert [c.amount for c in root.children[1].children] == [2194000.0]
+
+
+# FY2550-2551 volumes: '6.1 แผนงบประมาณ : …' plans and '6.1.1 ผลผลิตที่ 1 : …'
+# outputs, printed on a page that also holds the indicator table (so it reads
+# as a table page); the expense-category detail follows on a text page
+OLD_LAYOUT_HEADINGS = [
+    _w("6. แผนงบประมาณ จำแนก ตามผลผลิต/โครงการ", 0.146),
+    _amount_row("6.1 แผนงบประมาณ : สร้างสังคมแห่งการเรียนรู้ตลอดชีวิต", "75,710,600", 0.146),
+    _w("จริยธรรม", 0.17),
+    _amount_row("6.1.1 ผลผลิตที่ 1 : ผู้สำเร็จการศึกษาด้านวิทยาศาสตร์", "75,710,600", 0.205),
+    _amount_row("กิจกรรม", "75,710,600", 0.228),
+    _amount_row("1) จัดการศึกษาด้านวิทยาศาสตร์", "75,710,600", 0.224),
+    _w("6.1.1.1 เป้าหมายผลผลิต", 0.205),
+    _w("ตัวชี้วัด หน่วยนับ ปี 2549 ปี 2550", 0.273),
+]
+OLD_LAYOUT_DETAIL = [
+    _w("6.1.1.3 รายละเอียดงบประมาณจำแนกตามงบรายจ่าย", 0.146),
+    _amount_row("1. งบบุคลากร", "75,710,600", 0.146),
+    _amount_row("1.1 เงินเดือนและค่าจ้างประจำ", "75,710,600", 0.155),
+]
+
+
+def test_old_layout_plan_and_output_headings_open_their_blocks():
+    headings = make_pdf_page(OLD_LAYOUT_HEADINGS)
+    headings.contains_table = True
+    detail = make_pdf_page(OLD_LAYOUT_DETAIL)
+    root = extract_tree_levels(get_entries(headings.lines + detail.lines))
+    plan, = root.children
+    assert plan.budget_type.name == "BUDGET_PLAN"
+    assert plan.name.split()[:3] == ["6.1", "แผนงบประมาณ", ":"]
+    assert plan.name.split()[-3:] == ["จริยธรรม", "75,710,600", "บาท"]
+    output, = plan.children
+    assert output.budget_type.name == "OUTPUT"
+    assert output.amount == 75710600
+    assert [c.name.split()[1] for c in output.children] == ["งบบุคลากร"]
+
+
+def test_output_sub_heading_is_no_header_outside_the_old_layout():
+    # '7.1.1 ผลผลิตที่ 1 : …' in later volumes describes an output in §7; the
+    # node is its detail block's 'ผลผลิต : …' header
+    page = make_pdf_page([_amount_row("7.1.1 ผลผลิตที่ 1 : ผู้สำเร็จการศึกษา", "75,710,600", 0.205)])
+    page.contains_table = True
+    assert get_entries(page.lines) == []
