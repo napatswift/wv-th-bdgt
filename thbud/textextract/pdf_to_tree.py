@@ -135,6 +135,28 @@ def get_amount_from_lines(lines) -> float:
     return get_amount_from_string(' '.join(str(line) for line in lines))
 
 
+def _from_pdf(line: 'LineText') -> bool:
+    return bool(getattr(getattr(line.page, 'document', None), 'is_pdf', False))
+
+
+# a PDF amount column is set well apart from the text: '… 1,968,000' leaves a
+# wide gap, a number that ends a wrapped name ('…ภาค 1', 'หมายเลข 304') doesn't
+_PDF_AMOUNT_GAP = 0.03
+_NUMBER_OR_DASH = re.compile(r'^(-|\d{1,3}(?:,\d{3})*(?:\.\d+)?)$')
+
+
+def _is_activity_table_row(line: 'LineText') -> bool:
+    """A PDF row of the activity summary table: a name over four or more
+    number-or-dash columns quoted in millions ('1. … - - 1.5000 - 1.5000')."""
+    words = [w.text for w in line.words]
+    tail = 0
+    for w in reversed(words):
+        if not _NUMBER_OR_DASH.match(w):
+            break
+        tail += 1
+    return tail >= 4
+
+
 def _bare_total(line: 'LineText'):
     """The total of a bulleted row whose 'บาท' cell is missing, else None.
 
@@ -152,6 +174,9 @@ def _bare_total(line: 'LineText'):
     if len(words) < 2 or not tokens or not get_patern_of_bullet(tokens[0])[1]:
         return None
     if any(is_baht_marker(w) for w in words):
+        return None
+    if _from_pdf(line) and (line.words[-1].x0 - line.words[-2].x1 < _PDF_AMOUNT_GAP
+                            or _is_activity_table_row(line)):
         return None
     return _parse_amount_token(words[-1])
 
@@ -330,11 +355,48 @@ UNCOMMITTED_SUBTOTAL = 'uncommitted_subtotal'
 _HEADER_TYPES = ('budget_plan', 'PROJECT', 'OUTPUT')
 
 
+# '7.4.1.5 งบประมาณรายจ่าย จำแนกตามกิจกรรม - งบรายจ่าย': the activity summary
+# table, quoted in millions ('หน่วย : ล้านบาท'); its rows are not budget lines
+_ACTIVITY_TABLE_TITLE = re.compile(r'จำแนกตามกิจกรรม')
+_PLAN_NUMBER = re.compile(r'7\.\d+$')
+# '7.1.1 โครงการที่ 1 : …', '7.1.1.1 วัตถุประสงค์': a §7 sub-heading describing a
+# plan's output/project; spending lines are numbered under categories 1-5
+_SECTION_SEVEN_SUBHEADING = re.compile(r'7(\.\d+){2,}$')
+
+
+def _is_plan_heading(line_text: List[str], pdf: bool) -> bool:
+    """A budget-plan row of a table page: '7.3 แผนงาน…', or '<bullet> แผนงาน…'.
+    In a PDF the word 'แผนงาน' also turns up second in wrapped prose ('…ตาม
+    อนุสัญญา แผนงาน และพันธกรณี'), so there it must follow a bullet."""
+    if re.match(r'7.\d+$', line_text[0]):
+        return True
+    if len(line_text) < 2 or not line_text[1].startswith('แผนงาน'):
+        return False
+    return not pdf or bool(get_patern_of_bullet(line_text[0])[1])
+
+
+def _ends_section_seven(line_text: List[str], line: 'LineText') -> bool:
+    """The spending detail resumes: an output/project header ('ผลผลิต : …',
+    'โครงการ : …'), a plan heading, or a category total ('1. งบเงินอุดหนุน … บาท')."""
+    if line_text[0].replace(':', '') in ('ผลผลิต', 'โครงการ') or _PLAN_NUMBER.match(line_text[0]):
+        return True
+    return (len(line_text) > 1 and line_text[1].startswith('งบ')
+            and bool(get_patern_of_bullet(line_text[0])[1])
+            and _line_bears_total_column(line))
+
+
 def get_entries(lines: List[LineText]):
     # flags
     bullet_flag = False
     # project and output flag
     proj_outp_flag = False
+    # PDF only, on pages not seen as tables: inside an activity summary table,
+    # or inside a §7 sub-section's description ('7.5.1.2 สถานที่ดำเนินการ' and
+    # its numbered lists) until the spending detail starts again
+    in_activity_table = False
+    in_section_seven = False
+    # PDF only: a plan heading whose amount is on a wrapped next line
+    open_plan = None
 
     entry = []
     entries = []
@@ -359,15 +421,66 @@ def get_entries(lines: List[LineText]):
         if is_redundant_line(line_text):
             continue
 
-        # budget plan
-        if line.page.contains_table:
-            if re.match(r'7.\d+$', line_text[0]) or (
-                len(line_text) > 1 and line_text[1].startswith('แผนงาน')
-            ):
+        pdf = _from_pdf(line)
+        if open_plan is not None:
+            if (not get_patern_of_bullet(line_text[0])[1]
+                    and not _is_plan_heading(line_text, pdf)):
+                open_plan.append(line_id)
+                if _line_bears_total_column(line_id):
+                    open_plan = None
+                continue
+            open_plan = None
+
+        if pdf and not line.page.contains_table:
+            if _SECTION_SEVEN_SUBHEADING.match(line_text[0]):
+                if entry:
+                    entries.append(
+                        ('item' if bullet_flag else proj_outp_flag, entry, False))
+                bullet_flag = proj_outp_flag = False
+                entry = []
+                in_activity_table = bool(
+                    _ACTIVITY_TABLE_TITLE.search(line_text_string.replace(' ', '')))
+                in_section_seven = True
+                continue
+            if in_section_seven:
+                if not _ends_section_seven(line_text, line_id):
+                    continue
+                in_section_seven = in_activity_table = False
+            if in_activity_table:
+                if not _line_bears_total_column(line_id):
+                    continue
+                in_activity_table = False
+            elif _ACTIVITY_TABLE_TITLE.search(line_text_string.replace(' ', '')):
+                in_activity_table = True
+                continue
+        else:
+            in_activity_table = False
+
+        if _PLAN_NUMBER.match(line_text[0]):
+            in_section_seven = False
+
+        # budget plan: on a table page, or a '7.N แผนงาน…' heading on any PDF page
+        if line.page.contains_table or (
+                pdf and _PLAN_NUMBER.match(line_text[0]) and len(line_text) > 1
+                and line_text[1].startswith('แผนงาน')):
+            if _is_plan_heading(line_text, pdf):
+                if pdf:
+                    # a PDF item left open never runs on into the next plan
+                    if entry:
+                        entries.append(
+                            ('item' if bullet_flag else proj_outp_flag, entry, False))
+                    bullet_flag = proj_outp_flag = False
+                    entry = []
                 entries.append(('budget_plan', [line_id]))
+                if pdf and not _line_bears_total_column(line_id):
+                    open_plan = entries[-1][1]
             continue
 
         patern_of_bullet = get_patern_of_bullet(line_text[0])
+        if (bullet_flag and entry and _from_pdf(line)
+                and re.match(r'[1-9][0-9]*$', line_text[0])):
+            # '1 อาคาร 4,922,100 บาท' under an open item is its quantity line
+            patern_of_bullet = ('', 0)
 
         if (
             re.match(r'ป?ี \d{4} ', line_text_string)
@@ -702,16 +815,17 @@ def _activity_x_shifts(entries, xs):
     the 'N.' / 'N.N…' / 'N)' category rows around it, so x0 alone makes them
     siblings:
       - category-first: the nearest preceding item at the same-or-lower x is a
-        category at the SAME x -> the activity is its child (+0.5); a following
+        category at the SAME x -> the activity is its child (+half a step); a following
         activity at that x after such a child inherits the shift (its sibling);
       - activity-first: otherwise, if the next item at the same-or-lower x is a
-        category at the same x -> the activity is the parent of those (-0.5);
+        category at the same x -> the activity is the parent of those (-half);
       - an activity printed deeper, inside the items of such a nested activity
         (at the '(N)' indent), is moved up beside it: a กิจกรรม is never the
         child of another กิจกรรม.
     Neighbours are looked up within the activity's header segment. Returns
     {entry index: dx}; empty when no activity row is printed this way."""
     eps = 0.005
+    pdf = bool(entries) and _from_pdf(entries[0].lines[0])
     shifts = {}
     nested = set()  # activities moved under their category (category-first)
 
@@ -740,6 +854,19 @@ def _activity_x_shifts(entries, xs):
         return (j is not None and abs(xs[j] - xs[i]) < eps
                 and _bullet_key(entries[j])[0] in _CATEGORY_FAMILIES)
 
+    def half(i):
+        # half an indent step: 0.5 of a column in an xlsx; in a PDF, where x is
+        # a page fraction, half the gap to the activity's first deeper row, so
+        # it lands between its category and its own '(N)' items
+        if not pdf:
+            return 0.5
+        for j in range(i + 1, len(entries)):
+            if entries[j].itemtype in _HEADER_TYPES:
+                break
+            if entries[j].itemtype == 'item' and xs[j] > xs[i] + eps:
+                return (xs[j] - xs[i]) / 2
+        return 0.5
+
     def nest_beside(i, a):
         shifts[i] = xs[a] + shifts[a] - xs[i]
         nested.add(i)
@@ -753,13 +880,13 @@ def _activity_x_shifts(entries, xs):
                 if prev in nested:
                     nest_beside(i, prev)
             elif same_x_category(i, prev):
-                shifts[i] = +0.5
+                shifts[i] = +half(i)
                 nested.add(i)
             elif enclosing(i) in nested:
                 # printed at the indent of a nested activity's own items
                 nest_beside(i, enclosing(i))
         elif same_x_category(i, neighbour(i, +1)):
-            shifts[i] = -0.5
+            shifts[i] = -half(i)
     return shifts
 
 
