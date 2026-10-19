@@ -99,6 +99,8 @@ def page_contains_table(page: fitz.Page) -> bool:
 
 
 class DocumentText:
+    is_pdf = True   # rows are positioned words (pdf_to_tree's PDF-only row rules)
+
     def __init__(
         self,
         filepath: str,
