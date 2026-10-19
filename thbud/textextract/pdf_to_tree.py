@@ -213,6 +213,63 @@ def _entry_amount(bud_item: 'LineItem'):
     return get_amount_from_lines(bud_item.lines)
 
 
+def _is_column_token(text: str) -> bool:
+    """A word an amount column is made of: a number, a dash, 'บาท' or a '*'."""
+    return (is_baht_marker(text) or bool(_NUMBER_OR_DASH.match(text))
+            or text == '*')
+
+
+def _cells(line: 'LineText') -> List[List[str]]:
+    """A row's cells as their whitespace tokens. An XLSX cell is one word; in a
+    PDF a word set _PDF_AMOUNT_GAP apart from the previous one starts a cell."""
+    if not _from_pdf(line):
+        cells = [w.text.split() for w in line.words]
+    else:
+        cells, prev = [], None
+        for w in line.words:
+            if prev is None or w.x0 - prev.x1 >= _PDF_AMOUNT_GAP:
+                cells.append([])
+            cells[-1].append(w.text)
+            prev = w
+    return [c for c in cells if c]
+
+
+def _entry_label(lines: List['LineText']) -> Tuple[str, str]:
+    """(bullet, label) of an entry, read from its words rather than its joined
+    text: the first row's bullet (glued or not) and every amount column — a cell
+    of numbers, dashes and 'บาท' set apart from the text, or a row of nothing
+    else — are dropped wherever they sit; the text of every row (wrapped name,
+    quantity line) is kept in reading order. A number glued to the text ('…
+    ตามมาตรา 40', 'ภาคที่ 5') is the name's own. bullet is None if there is none.
+    """
+    bullet, words, has_column = None, [], False
+    for li, line in enumerate(lines):
+        cells = _cells(line)
+        if li == 0 and cells:
+            head = _leading_tokens(' '.join(cells[0]))
+            if get_patern_of_bullet(head[0])[1]:
+                bullet = head.pop(0)
+            cells[0] = head
+            cells = [c for c in cells if c]
+        whole_row = all(all(_is_column_token(t) for t in c) for c in cells)
+        for ci, cell in enumerate(cells):
+            if all(_is_column_token(t) for t in cell) and (ci > 0 or whole_row):
+                has_column = True
+                continue
+            words.extend(cell)
+    if not has_column and words and is_baht_marker(words[-1]):
+        # an XLSX total flattened into the text cell ('… 143,000 บาท'), or a PDF
+        # total printed close to the text: drop it the way the legacy string
+        # scan read it, keeping a bare number that ends the name
+        words.pop()
+        dropped = False
+        while words and _NUMBER_OR_DASH.match(words[-1]) and (
+                not dropped or ',' in words[-1] or words[-1] == '-'):
+            dropped = dropped or words[-1] != '-'
+            words.pop()
+    return bullet, ' '.join(words)
+
+
 def get_year_from_string(text: str) -> Tuple[int, int]:
     # ปี 2563 ตั�งงบประมาณ 616,834,700 บาท -> 2563, 2563
     # ปี 2563-2564 ตั�งงบประมาณ 616,834,700 บาท -> 2563, 2564
@@ -385,6 +442,70 @@ def _ends_section_seven(line_text: List[str], line: 'LineText') -> bool:
             and _line_bears_total_column(line))
 
 
+# FY2550-2551 volumes: plans are '6.1 แผนงบประมาณ : …' and their outputs /
+# projects '6.1.1 ผลผลิตที่ 1 : …', each with its amount, printed on pages that
+# also hold the indicator tables
+_OLD_PLAN_HEADING = re.compile(r'\d+\.\d+ แผนงบประมาณ ?:')
+_OLD_HEADER_HEADING = re.compile(r'\d+\.\d+\.\d+ (ผลผลิต|โครงการ)ที่ ?\d+ ?:')
+
+
+def _old_layout_heading(text: str, old_layout: bool):
+    """'budget_plan' / 'OUTPUT' / 'PROJECT' for a FY2550-2551 heading row, else
+    None. An output/project only counts once a plan heading set the layout: in
+    later volumes '7.1.1 ผลผลิตที่ 1 : …' is a §7 description sub-heading."""
+    if _OLD_PLAN_HEADING.match(text):
+        return 'budget_plan'
+    m = old_layout and _OLD_HEADER_HEADING.match(text)
+    if m:
+        return 'OUTPUT' if m.group(1) == 'ผลผลิต' else 'PROJECT'
+    return None
+
+
+def _continues_heading(line: LineText, line_text: List[str]) -> bool:
+    """A wrapped heading's next row: words only — no bullet, no number, no
+    'กิจกรรม' group, no header of its own, no amount column."""
+    return (not get_patern_of_bullet(line_text[0])[1]
+            and not line_text[0].startswith(('กิจกรรม', '*'))
+            and line_text[0] not in _PERSONNEL_HEADERS
+            and not any(check_proj_outp(k, line_text)
+                        for k in ('ผลผลิต', 'โครงการ', 'แผนงาน'))
+            and not any(any(c.isdigit() for c in t) for t in line_text)
+            and not _line_bears_total_column(line))
+
+
+def _splice_before_amount(head: LineText, cont: LineText) -> LineText:
+    """`head` with `cont`'s words set before its trailing amount and 'บาท'."""
+    k = len(head.words)
+    while k > 1 and (is_baht_marker(head.words[k - 1].text)
+                     or _parse_amount_token(head.words[k - 1].text) is not None):
+        k -= 1
+    return LineText(head.words[:k] + cont.words + head.words[k:],
+                    head.page_index, head.line_index, head.page)
+
+
+# a multi-level dotted bullet ('2.1.1.2'); a plain '1' after a word is a quantity
+_DOTTED_BULLET = re.compile(r'\d{1,2}(\.\d{1,2})+$')   # not a decimal ('78.6212')
+_THAI_WORD = re.compile(r'[\u0E00-\u0E7F]+$')
+
+
+def _spills_ahead_of_bullet(line: LineText, line_text: List[str]) -> bool:
+    """PDF: a short unbulleted word, then a dotted bullet ('คัน 2.1.1.2 …')."""
+    return (_from_pdf(line) and len(line.words) > 2 and len(line_text) > 2
+            and line.words[0].text == line_text[0] and len(line_text[0]) <= 6
+            and bool(_THAI_WORD.match(line_text[0]))
+            and not get_patern_of_bullet(line_text[0])[1]
+            and bool(_DOTTED_BULLET.match(line_text[1])))
+
+
+
+def _ends_item_just_above(entries, line: LineText) -> bool:
+    """The last entry is an item that closed on the row right above `line`, on a
+    text page — where a wrapped unit word can spill under it."""
+    if not entries or entries[-1][0] != 'item' or line.page.contains_table:
+        return False
+    last = entries[-1][1][-1]
+    return last.page is line.page and last.line_index == line.line_index - 1
+
 def get_entries(lines: List[LineText]):
     # flags
     bullet_flag = False
@@ -397,6 +518,9 @@ def get_entries(lines: List[LineText]):
     in_section_seven = False
     # PDF only: a plan heading whose amount is on a wrapped next line
     open_plan = None
+    # PDF only: FY2550-2551 headings seen; one whose name may wrap onto the next row
+    old_layout = False
+    open_heading = None
 
     entry = []
     entries = []
@@ -408,6 +532,19 @@ def get_entries(lines: List[LineText]):
 
         # then split by whitespace
         line_text = _leading_tokens(line_text_string)
+
+        if (not bullet_flag and _spills_ahead_of_bullet(line, line_text)
+                and _ends_item_just_above(entries, line)):
+            # 'คัน 2.1.1.2 ครุภัณฑ์คอมพิวเตอร์ …': the closed item's unit word
+            # wrapped onto this row, left of its bullet; it goes back to that
+            # item and the row starts at the bullet
+            spilled = LineText(line.words[:1], line.page_index,
+                               line.line_index, line.page)
+            entries[-1][1].append(spilled)
+            line = line_id = LineText(line.words[1:], line.page_index,
+                                      line.line_index, line.page)
+            line_text_string = str(line)
+            line_text = _leading_tokens(line_text_string)
 
         # a unit's personnel block header ('รายการบุคลากรภาครัฐ') starts a new
         # unit (one per sheet in ministry-overview files): reset the level
@@ -430,6 +567,28 @@ def get_entries(lines: List[LineText]):
                     open_plan = None
                 continue
             open_plan = None
+
+        if open_heading is not None:
+            head_lines, open_heading = open_heading, None
+            if (head_lines[-1].page is line.page
+                    and _continues_heading(line_id, line_text)):
+                head_lines[-1] = _splice_before_amount(head_lines[-1], line_id)
+                continue
+
+        heading = pdf and _old_layout_heading(line_text_string, old_layout)
+        if heading:
+            if entry:
+                entries.append(
+                    ('item' if bullet_flag else proj_outp_flag, entry, False))
+            bullet_flag = proj_outp_flag = False
+            entry = []
+            old_layout = True
+            entries.append((heading, [line_id]))
+            if _line_bears_total_column(line_id):
+                open_heading = entries[-1][1]
+            else:
+                open_plan = entries[-1][1]
+            continue
 
         if pdf and not line.page.contains_table:
             if _SECTION_SEVEN_SUBHEADING.match(line_text[0]):
@@ -474,6 +633,8 @@ def get_entries(lines: List[LineText]):
                 entries.append(('budget_plan', [line_id]))
                 if pdf and not _line_bears_total_column(line_id):
                     open_plan = entries[-1][1]
+                elif pdf:
+                    open_heading = entries[-1][1]
             continue
 
         patern_of_bullet = get_patern_of_bullet(line_text[0])
@@ -561,6 +722,9 @@ def get_entries(lines: List[LineText]):
             if _line_bears_total_column(line_id):
                 entries.append(
                     ('item' if bullet_flag else proj_outp_flag, entry))
+                if pdf and not bullet_flag:
+                    # its name may run on below the amount row
+                    open_heading = entry
                 bullet_flag = False
                 proj_outp_flag = False
                 entry = []
@@ -986,6 +1150,8 @@ def resolve_uncommitted_subtotals(entries: List[LineItem]) -> List[LineItem]:
             i += 1
             continue
         level = _gap_closing_level(out, i)
+        if level is None:
+            level = _sole_leaf_level(out, i)
         if level is not None:
             cand.itemtype = 'item'
             cand.set_level(level)
@@ -1045,6 +1211,30 @@ def _gap_closing_level(entries: List[LineItem], ci: int):
                                for j in children)
     if amount > 0 and abs(gap - amount) <= 0.005:
         return level
+    return None
+
+
+def _sole_leaf_level(entries: List[LineItem], ci: int):
+    """The level of candidate `ci` as the only child of the item it follows, or None.
+
+    An item-less row ('2) ค่าครุภัณฑ์ 33,750,600 บาท' / 'รายการไม่ผูกพัน
+    33,750,600 บาท', then the next sibling) is printed deeper than that item,
+    nothing deeper follows it, and it carries the item's whole amount."""
+    def is_node(e):
+        return e.itemtype == 'item' or e.itemtype in _HEADER_TYPES
+
+    prev = next((j for j in range(ci - 1, -1, -1) if is_node(entries[j])), None)
+    if prev is None or entries[prev].itemtype != 'item':
+        return None
+    p_level = entries[prev].level
+    if entries[ci].x0 <= entries[prev].x0:
+        return None
+    nxt = next((j for j in range(ci + 1, len(entries)) if is_node(entries[j])), None)
+    if nxt is not None and entries[nxt].level > p_level:
+        return None
+    amount = get_amount_from_lines(entries[ci].lines)
+    if abs(get_amount_from_lines(entries[prev].lines) - amount) <= 0.005:
+        return p_level + 1
     return None
 
 
@@ -1141,6 +1331,7 @@ def extract_tree_levels(
         else:
             parent = parent_stack[-1]['node']
 
+        bullet, label = _entry_label(bud_item.lines)
         node = BudgetItem(
             budget_type=itemtype_mapper[bud_item.itemtype],
             name=str(bud_item).replace('\n', '\t').strip(),
@@ -1149,6 +1340,8 @@ def extract_tree_levels(
             page=bud_item.page_index,
             row_start=bud_item.row_start,
             row_end=bud_item.row_end,
+            label=label,
+            bullet=bullet,
             parent=parent,
         )
 
