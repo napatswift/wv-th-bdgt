@@ -213,6 +213,63 @@ def _entry_amount(bud_item: 'LineItem'):
     return get_amount_from_lines(bud_item.lines)
 
 
+def _is_column_token(text: str) -> bool:
+    """A word an amount column is made of: a number, a dash, 'บาท' or a '*'."""
+    return (is_baht_marker(text) or bool(_NUMBER_OR_DASH.match(text))
+            or text == '*')
+
+
+def _cells(line: 'LineText') -> List[List[str]]:
+    """A row's cells as their whitespace tokens. An XLSX cell is one word; in a
+    PDF a word set _PDF_AMOUNT_GAP apart from the previous one starts a cell."""
+    if not _from_pdf(line):
+        cells = [w.text.split() for w in line.words]
+    else:
+        cells, prev = [], None
+        for w in line.words:
+            if prev is None or w.x0 - prev.x1 >= _PDF_AMOUNT_GAP:
+                cells.append([])
+            cells[-1].append(w.text)
+            prev = w
+    return [c for c in cells if c]
+
+
+def _entry_label(lines: List['LineText']) -> Tuple[str, str]:
+    """(bullet, label) of an entry, read from its words rather than its joined
+    text: the first row's bullet (glued or not) and every amount column — a cell
+    of numbers, dashes and 'บาท' set apart from the text, or a row of nothing
+    else — are dropped wherever they sit; the text of every row (wrapped name,
+    quantity line) is kept in reading order. A number glued to the text ('…
+    ตามมาตรา 40', 'ภาคที่ 5') is the name's own. bullet is None if there is none.
+    """
+    bullet, words, has_column = None, [], False
+    for li, line in enumerate(lines):
+        cells = _cells(line)
+        if li == 0 and cells:
+            head = _leading_tokens(' '.join(cells[0]))
+            if get_patern_of_bullet(head[0])[1]:
+                bullet = head.pop(0)
+            cells[0] = head
+            cells = [c for c in cells if c]
+        whole_row = all(all(_is_column_token(t) for t in c) for c in cells)
+        for ci, cell in enumerate(cells):
+            if all(_is_column_token(t) for t in cell) and (ci > 0 or whole_row):
+                has_column = True
+                continue
+            words.extend(cell)
+    if not has_column and words and is_baht_marker(words[-1]):
+        # an XLSX total flattened into the text cell ('… 143,000 บาท'), or a PDF
+        # total printed close to the text: drop it the way the legacy string
+        # scan read it, keeping a bare number that ends the name
+        words.pop()
+        dropped = False
+        while words and _NUMBER_OR_DASH.match(words[-1]) and (
+                not dropped or ',' in words[-1] or words[-1] == '-'):
+            dropped = dropped or words[-1] != '-'
+            words.pop()
+    return bullet, ' '.join(words)
+
+
 def get_year_from_string(text: str) -> Tuple[int, int]:
     # ปี 2563 ตั�งงบประมาณ 616,834,700 บาท -> 2563, 2563
     # ปี 2563-2564 ตั�งงบประมาณ 616,834,700 บาท -> 2563, 2564
@@ -1141,6 +1198,7 @@ def extract_tree_levels(
         else:
             parent = parent_stack[-1]['node']
 
+        bullet, label = _entry_label(bud_item.lines)
         node = BudgetItem(
             budget_type=itemtype_mapper[bud_item.itemtype],
             name=str(bud_item).replace('\n', '\t').strip(),
@@ -1149,6 +1207,8 @@ def extract_tree_levels(
             page=bud_item.page_index,
             row_start=bud_item.row_start,
             row_end=bud_item.row_end,
+            label=label,
+            bullet=bullet,
             parent=parent,
         )
 
