@@ -462,10 +462,13 @@ def _old_layout_heading(text: str, old_layout: bool):
 
 
 def _continues_heading(line: LineText, line_text: List[str]) -> bool:
-    """A wrapped heading's second row: words only — no bullet, no number, no
-    'กิจกรรม' group, no amount column."""
+    """A wrapped heading's next row: words only — no bullet, no number, no
+    'กิจกรรม' group, no header of its own, no amount column."""
     return (not get_patern_of_bullet(line_text[0])[1]
             and not line_text[0].startswith(('กิจกรรม', '*'))
+            and line_text[0] not in _PERSONNEL_HEADERS
+            and not any(check_proj_outp(k, line_text)
+                        for k in ('ผลผลิต', 'โครงการ', 'แผนงาน'))
             and not any(any(c.isdigit() for c in t) for t in line_text)
             and not _line_bears_total_column(line))
 
@@ -481,16 +484,27 @@ def _splice_before_amount(head: LineText, cont: LineText) -> LineText:
 
 
 # a multi-level dotted bullet ('2.1.1.2'); a plain '1' after a word is a quantity
-_DOTTED_BULLET = re.compile(r'\d+(\.\d+)+$')
+_DOTTED_BULLET = re.compile(r'\d{1,2}(\.\d{1,2})+$')   # not a decimal ('78.6212')
+_THAI_WORD = re.compile(r'[\u0E00-\u0E7F]+$')
 
 
 def _spills_ahead_of_bullet(line: LineText, line_text: List[str]) -> bool:
     """PDF: a short unbulleted word, then a dotted bullet ('คัน 2.1.1.2 …')."""
     return (_from_pdf(line) and len(line.words) > 2 and len(line_text) > 2
             and line.words[0].text == line_text[0] and len(line_text[0]) <= 6
+            and bool(_THAI_WORD.match(line_text[0]))
             and not get_patern_of_bullet(line_text[0])[1]
             and bool(_DOTTED_BULLET.match(line_text[1])))
 
+
+
+def _ends_item_just_above(entries, line: LineText) -> bool:
+    """The last entry is an item that closed on the row right above `line`, on a
+    text page — where a wrapped unit word can spill under it."""
+    if not entries or entries[-1][0] != 'item' or line.page.contains_table:
+        return False
+    last = entries[-1][1][-1]
+    return last.page is line.page and last.line_index == line.line_index - 1
 
 def get_entries(lines: List[LineText]):
     # flags
@@ -519,10 +533,14 @@ def get_entries(lines: List[LineText]):
         # then split by whitespace
         line_text = _leading_tokens(line_text_string)
 
-        if not bullet_flag and _spills_ahead_of_bullet(line, line_text):
+        if (not bullet_flag and _spills_ahead_of_bullet(line, line_text)
+                and _ends_item_just_above(entries, line)):
             # 'คัน 2.1.1.2 ครุภัณฑ์คอมพิวเตอร์ …': the closed item's unit word
-            # wrapped onto this row, left of its bullet; the row starts there
-            logger.debug(f'get_entries::drops `{line.words[0].text}` ahead of `{line}`')
+            # wrapped onto this row, left of its bullet; it goes back to that
+            # item and the row starts at the bullet
+            spilled = LineText(line.words[:1], line.page_index,
+                               line.line_index, line.page)
+            entries[-1][1].append(spilled)
             line = line_id = LineText(line.words[1:], line.page_index,
                                       line.line_index, line.page)
             line_text_string = str(line)
@@ -551,10 +569,10 @@ def get_entries(lines: List[LineText]):
             open_plan = None
 
         if open_heading is not None:
-            kind, head = open_heading
-            open_heading = None
-            if _continues_heading(line_id, line_text):
-                entries[-1] = (kind, [_splice_before_amount(head, line_id)])
+            head_lines, open_heading = open_heading, None
+            if (head_lines[-1].page is line.page
+                    and _continues_heading(line_id, line_text)):
+                head_lines[-1] = _splice_before_amount(head_lines[-1], line_id)
                 continue
 
         heading = pdf and _old_layout_heading(line_text_string, old_layout)
@@ -567,7 +585,7 @@ def get_entries(lines: List[LineText]):
             old_layout = True
             entries.append((heading, [line_id]))
             if _line_bears_total_column(line_id):
-                open_heading = (heading, line_id)
+                open_heading = entries[-1][1]
             else:
                 open_plan = entries[-1][1]
             continue
@@ -615,6 +633,8 @@ def get_entries(lines: List[LineText]):
                 entries.append(('budget_plan', [line_id]))
                 if pdf and not _line_bears_total_column(line_id):
                     open_plan = entries[-1][1]
+                elif pdf:
+                    open_heading = entries[-1][1]
             continue
 
         patern_of_bullet = get_patern_of_bullet(line_text[0])
@@ -702,6 +722,9 @@ def get_entries(lines: List[LineText]):
             if _line_bears_total_column(line_id):
                 entries.append(
                     ('item' if bullet_flag else proj_outp_flag, entry))
+                if pdf and not bullet_flag:
+                    # its name may run on below the amount row
+                    open_heading = entry
                 bullet_flag = False
                 proj_outp_flag = False
                 entry = []
