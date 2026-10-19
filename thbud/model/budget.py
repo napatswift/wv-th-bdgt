@@ -43,6 +43,8 @@ class BudgetItem(NodeMixin):
         fiscal_year_budget: List['FiscalYearBudget'] = None,
         row_start: Optional[int] = None,
         row_end: Optional[int] = None,
+        label: Optional[str] = None,
+        bullet: Optional[str] = None,
     ):
         super().__init__()
         if isinstance(budget_type, BudgetType):
@@ -69,11 +71,15 @@ class BudgetItem(NodeMixin):
             raise ValueError(
                 f'fiscal_year_budget must be list, got {type(fiscal_year_budget)}')
 
-        for label, row in (('row_start', row_start), ('row_end', row_end)):
+        for field, row in (('row_start', row_start), ('row_end', row_end)):
             if row is not None and not isinstance(row, int):
-                raise ValueError(f'{label} must be int, got {type(row)}')
+                raise ValueError(f'{field} must be int, got {type(row)}')
 
         self.name = name
+        # the description alone (no bullet, no amount columns), when the reader
+        # could tell them apart from the words' positions; `name` stays raw
+        self.label = label
+        self.bullet = bullet
         self.amount = amount
         self.document = document
         self.page = page
