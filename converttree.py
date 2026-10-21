@@ -1,6 +1,6 @@
 from thbud.model.budget import BudgetType, BudgetItem
 from thbud.textextract import DocumentText, get_entries, extract_tree_levels
-import logging
+from loguru import logger
 import json
 import pandas as pd
 import os
@@ -8,9 +8,6 @@ import time
 import re
 import fitz
 import subprocess
-
-logger = logging.getLogger(__name__)
-logging.basicConfig(level=logging.INFO)
 
 root_pdf_dir = 'toc/PDF'
 contents_filepath = 'toc/toc_output/toc.json'

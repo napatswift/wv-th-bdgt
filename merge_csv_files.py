@@ -1,6 +1,7 @@
 import pandas as pd
 import os
 import openpyxl
+from loguru import logger
 
 
 def list_file_in_directory(directory):
@@ -36,4 +37,4 @@ if __name__ == '__main__':
     directory = 'output/2568'
     output_file = 'output.xlsx'
     merge_csv_files(directory, output_file)
-    print('Done')
+    logger.info('Done')

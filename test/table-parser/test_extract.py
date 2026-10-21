@@ -1,5 +1,6 @@
 from thbud.tableparser import extract_tables, is_on_line, dfs
 import fitz
+from loguru import logger
 
 # is_on_line tests
 def test_is_on_line():
@@ -42,7 +43,7 @@ def extract_tables_test(filename: str, num_tables: int):
     # get the lines
     rects = [d['rect'] for d in page.get_drawings() if is_rect_inside_page(d['rect'], page.rect.width, page.rect.height)]
     tables = extract_tables(rects)
-    print([[r.width*r.height for r in tab.rects] for tab in tables])
+    logger.info([[r.width*r.height for r in tab.rects] for tab in tables])
     assert len(tables) == num_tables
 
 def test_extract_1_table():

@@ -1,11 +1,18 @@
 from thbud.textextract import DocumentText, LineText
 from thbud.textextract import LineItem, extract_tree_levels
 from typing import List
-import logging
+from loguru import logger
 import re
 import pandas as pd
-logger = logging.getLogger(__name__)
 
+logger.add(
+    "yellowbook.log",
+    rotation="10 MB",
+    retention="10 days",
+    level="INFO",
+    format="{time:YYYY-MM-DD HH:mm:ss.SSS} | {level: <8} | {name}:{function}:{line} - {message}",
+    enqueue=True,  # Process log messages asynchronously
+)
 
 class YBLineItem(LineItem):
     def __init__(self, itemtype: str, line_text: List[LineText]):
@@ -64,7 +71,7 @@ def get_entries(lines: List[LineText]):
             objective_or_kpi = False
 
         if (objective_or_kpi):
-            print('objective_or_kpi', line_text)
+            logger.info(f'objective_or_kpi {line_text}')
             continue
         entry.append(line)
 

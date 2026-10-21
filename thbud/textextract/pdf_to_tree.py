@@ -5,9 +5,7 @@ from .text import is_baht_marker
 from ..model import BudgetItem, FiscalYearBudget
 import math
 import re
-import logging
-
-logger = logging.getLogger(__name__)
+from loguru import logger
 
 """
 class LineWrapper:

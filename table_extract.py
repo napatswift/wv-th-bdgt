@@ -1,5 +1,6 @@
 import fitz
 from thbud.tableparser import extract_tables
+from loguru import logger
 
 def extract_tables_test(filename: str, num_tables: int):
     doc = fitz.open(filename)
@@ -11,7 +12,7 @@ def extract_tables_test(filename: str, num_tables: int):
     page_height = page.rect.height
     # filter out the lines that are outside the page
 
-    print(len(rects))
+    logger.info(len(rects))
 
     def is_rect_inside_page(rect):
         return rect.x0 >= 0 and rect.x1 <= page_width and rect.y0 >= 0 and rect.y1 <= page_height
@@ -35,9 +36,9 @@ def extract_tables_test(filename: str, num_tables: int):
             )
     )
 
-    print('width', [r.width for r in rects])
+    logger.info(f"width {[r.width for r in rects]}")
     tables = extract_tables(rects)
-    print([[r.width*r.height for r in tab.rects] for tab in tables])
+    logger.info([[r.width*r.height for r in tab.rects] for tab in tables])
     assert len(tables) == num_tables
 
 # extract_tables_test('test/table-parser/pdf/pdf-0table.pdf', 0)
